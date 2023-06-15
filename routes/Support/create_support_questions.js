@@ -15,7 +15,8 @@ router.post("/",async(req,res)=>{
 		const new_Question = await Support_Question.create({
 			name:			payload.name,
 			email:  	    payload.email,
-			message:	payload.message,
+			message:		payload.message,
+			solved:         false
 		})
 		
 		return res.status(200).send("successfully posted a new question")
