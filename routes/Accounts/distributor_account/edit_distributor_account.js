@@ -8,7 +8,7 @@ const router = express.Router();
 router.post('/',async(req,res)=>{
 	//get payload
 	const payload = req.body; 
-
+	///console.log(payload)
 	//check if payload exists
 	if (!payload)
 		return res.status(400).send("Bad Request")

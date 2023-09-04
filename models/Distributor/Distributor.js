@@ -34,7 +34,9 @@ const Distributor_Schema = new mongoose.Schema({
 								email: String,
 								mobile: String
 							}],
+	views:					{ type: Number},
 	//subscription information
+	
 	subscription: 			{ type: Boolean},
 	subscription_plan: 		{ type: String},
 	//verification_status
