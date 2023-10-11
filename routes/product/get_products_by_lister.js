@@ -25,7 +25,7 @@ router.get('/:lister_id',async(req,res)=>{
             short_on_expiry_date : 1
         }
         const products = await Product.find(query,projections);
-        console.log('products2',products)
+        //console.log('products2',products)
         return res.status(200).send(products)
     }catch(err){
         console.log(err);
