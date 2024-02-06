@@ -46,6 +46,7 @@ const ManufacturerSchema = new mongoose.Schema({
 	verification_status:		{ type: Boolean},
 	suspension_status:  { type: Boolean},
 	//date of joining
+	account_type:		{type: String},
 	joined_in:					{ type: Date,default: Date.now},
 },{timestamps:true})
 
