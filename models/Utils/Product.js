@@ -6,12 +6,13 @@ const ProductSchema = new mongoose.Schema({
 	email_of_lister: 			{ type: String},
 	listed_by_id:				{ type: String}, //id of the lister
 	short_on_expiry:			{ type: Boolean}, //the product needs a quick sell as it is expiring soon
+	short_on_expiry_date:		{ type: Date},
 	//manufacturer information
 	manufactured_by: 			{ type: String},
-	manufactured_date: 			{ type: Date},
-	expiry_date:    			{ type: Date},
+	manufactured_by_id:			{ type: String},
 	//seller information
 	distributed_by:				{ type: String},
+	distributed_by_id:			{ type: String},
 	website_link_to_Seller: 	{ type: String},
 	//product information
 	description_of_product:		{ type: String},
@@ -29,6 +30,8 @@ const ProductSchema = new mongoose.Schema({
 	//category_of_product
 	industry: 					{ type: String},
 	technology: 				{ type: String},
+	//stats
+	views:						{ type: Number},
 	//featured status
 	sponsored:					{ type: Boolean},
 	//verification_status

@@ -17,16 +17,22 @@ router.post("/",async (req,res)=>{
     
     try{
         const existing_product = await Product.findOne({_id:id});
-        if (!existing_product)
+        if (!existing_product){
         	return res.status(400).send("could not find this product")
+        }else if(existing_product?.listed_by_id !== payload?.lister_id){
+            console.log(existing_product?.listed_by_id,payload?.lister_id)
+            return res.status(400).send("It seems you are not the owner of this product")
+        }else{
+            await Product.findOneAndDelete({_id:id} ).then((response)=>{
+                const email_payload = {
+                    email : existing_product.email_of_lister,
+                    name_of_product: existing_product?.name_of_product
+                }
+                Send_delete_product_email(email_payload)
+                return res.status(200).send("Sucessfully deleted this product")
+            })
+        }
 
-		await Product.findOneAndDelete({_id:id} ).then((response)=>{
-            const email_payload = {
-                email : existing_product.email_of_lister
-            }
-            Send_delete_product_email(email_payload)
-			return res.status(200).send("Sucessfully deleted this product")
-		})
         //return res.status(200).send("Sucessfully deleted")
     }catch(err){
 		console.log(err);
