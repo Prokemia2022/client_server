@@ -6,7 +6,7 @@ db.connect()
 const app = express()
 app.use(express.json())
 
-let origins = ['http://localhost:3000','https://prokemia.com','https://client-frontend-38mogkv8x-prokemia2022.vercel.app'];
+let origins = ['http://localhost:3000','https://prokemia.com','https://test.prokemia.com',];
 app.use(cors({credentials:true, origin: origins}));
 
 /*---control---*/
