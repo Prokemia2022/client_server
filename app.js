@@ -53,6 +53,7 @@ const Verifying_email_routes = require('./routes/verify_email.route.js')
 const update_script_route = require('./middleware/scripts/update_user_account.js');
 app.use('/api/script',update_script_route)
 const fetch_det_script_route = require('./middleware/scripts/fetch_user_details.middleware.js');
+const { edit_distributor } = require('./controllers/distributor.controller.js');
 app.use('/api/script',fetch_det_script_route);
 
 
