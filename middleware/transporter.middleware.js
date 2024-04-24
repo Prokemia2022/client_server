@@ -5,7 +5,7 @@ let Transporter = nodemailer.createTransport({
     // name: process.env.TRANSPORTER_NAME,
     // host: process.env.TRANSPORTER_HOST,
     // port: process.env.TRANSPORTER_PORT,
-    // secure: true, // true for 465, false for other ports
+    // secure: false, // true for 465, false for other ports
     // auth: {
     //     user: process.env.TRANSPORTER_AUTH_USER,
     //     pass: process.env.TRANSPORTER_AUTH_PASS,
