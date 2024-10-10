@@ -8,7 +8,7 @@ const ClientSchema = new mongoose.Schema({
 	profile_photo_url: 	{type:String},
 	account_type:		{type: String},
 	//company user information - tells us of the company infomation
-	email_of_company:	{type: String,unique:true}, //email of salesperson in the company
+	email_of_company:	{type: String}, //email of salesperson in the company
 	mobile_of_company:	{type: String},
 	address:			{type: String},
 	company_name:		{type: String},
@@ -31,4 +31,4 @@ const ClientSchema = new mongoose.Schema({
 	joined_in:			{ type: Date,default: Date.now},
 },{timestamps:true})
 
-module.exports = mongoose.model("clients",ClientSchema);
+module.exports = mongoose.model("clientsv1",ClientSchema);

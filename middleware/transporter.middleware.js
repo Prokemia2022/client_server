@@ -23,7 +23,9 @@ let Transporter = nodemailer.createTransport({
     },
     tls:{
         rejectUnauthorized:false
-    }
+    },
+    // debug: true,
+    // logger: true,
 });
 
 module.exports = Transporter;

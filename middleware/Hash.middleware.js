@@ -1,9 +1,14 @@
+/****************************UTILS*************************************/
 const bcrypt = require('bcryptjs');
 
-const Hash_str=(str)=>{
+/****************************FUNCTION**********************************/
+
+const HASH_STRING =(string)=>{
     const salt = bcrypt.genSaltSync(10);
-    const hashed_str = bcrypt.hashSync(str, salt);
-    return hashed_str;
+    const HASHED_STRING = bcrypt.hashSync(string, salt);
+    return HASHED_STRING;
 }
 
-module.exports = Hash_str;
+module.exports = {
+	HASH_STRING
+}
