@@ -48,7 +48,27 @@ const VERIFY_TOKEN = (req, res, next) =>{
     });
 }
 
+const CHECK_ADMIN_REFERER=(req, res, next)=> {
+	const isAdmin = req.user?.account_type === 'admin'
+/*
+	const referer = req.headers.referer || req.headers.referrer;
+	
+	const url_access = process.env.ADMIN_URL_ACCESS || 'https://arcadia-admin-frontend.onrender.com'
+	if (referer && referer.includes(url_access)) {
+		// Proceed if the referer matches the admin URL
+		req.isadmin = { isadmin: true };
+		return next();
+	}
+	*/
+	if (!isAdmin){
+		// If the referer does not match, deny access
+		res.status(403).json({ message: 'Forbidden: You are not authorized to access this server.' });
+	}
+	return next();
+}
+
 module.exports = {
     AUTHENTICATE_TOKEN,
-    VERIFY_TOKEN
+    VERIFY_TOKEN,
+	CHECK_ADMIN_REFERER
 };

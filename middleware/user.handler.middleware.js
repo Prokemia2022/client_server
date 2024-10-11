@@ -10,7 +10,7 @@ require('dotenv').config();
 
 const USER_API_AUTHORIZATION = async(req,res,next)=>{
     const USER_ID = req.user?.sub;
-	const USER_EMAIL = req.body?.email;
+	const USER_EMAIL = req.body?.email || req.query?.email ;
 	const USER_QUERY = { $or: [{ _id: USER_ID}, {email: USER_EMAIL }]};
 	/**
      * @description This middleware handles the api authentication by the user
@@ -41,7 +41,7 @@ const USER_API_AUTHORIZATION = async(req,res,next)=>{
 				error:		true,
 				message:	`Your account was flagged for deletion. Your account will be deleted in ${daysRemaining(EXISTING_USER?.account_status_model_ref?.deletion?.date)} days. Contact us: support@prokemia.com for any enquiries.`,
 			});
-		};	
+		};
 		next()
 	}catch(error){
 		LOGGER.log('error',`ERROR[AUTHENTICATING USER]: ${error}`);

@@ -10,7 +10,6 @@ const USER_BASE_MODEL_SCHEMA = new mongoose.Schema({
 	account_type:		{ type: String },
 	password:			{ type: String },
 	refresh_token:		{ type: String },
-	requests:			[{type: mongoose.Schema.Types.ObjectId, ref: 'REQUEST'}],
 	// account information
 	admin_account_model_ref:		{ type: mongoose.Schema.Types.ObjectId, ref: 'ADMIN'},
 	client_account_model_ref:		{ type: mongoose.Schema.Types.ObjectId, ref: 'CLIENT'},

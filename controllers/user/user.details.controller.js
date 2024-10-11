@@ -51,7 +51,7 @@ const FETCH_USER_DATA=(async(req,res)=>{
 				break;
 		};
         return res.status(200).send({
-            error: null,
+            error: false,
             data:  EXISTING_ACCOUNT
         });
     }catch(error){
@@ -77,35 +77,6 @@ const LIST_SUPPLIERS_ACCOUNTS_DATA=(async(req,res)=>{
         return res.sendStatus(500);
     }
 });
-
-const FETCH_ACCOUNTS_DATA=(async(req, res)=>{
-	let ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || req.connection.socket.remoteAddress).split(",")[0];
-	const ACCOUNT_TYPE = req.query.account_type;
-    try{
-		let ACCOUNTS_DATA ;
-		switch (ACCOUNT_TYPE){
-			case 'supplier':
-				const projection = { company: 1, image_url: 1, type: 1, description: 1, products: 1, consultants: 1, markets: 1, documents: 1 };
-				ACCOUNTS_DATA = await SUPPLIER_MODEL.find({},projection);
-				break;
-			default:
-				return res.status(200).send({
-					error:true,
-					message: 'Missing details'
-				});
-		}
-		return res.status(200).send({
-            error:null,
-            data: ACCOUNTS_DATA,
-        });
-    }catch(error){
-        LOGGER.log('error',`${ip} - System Error-[Fetching ACCOUNTs, id]`,error)
-        return res.sendStatus(500);
-    }
-
-});
-
-
 
 const FETCH_ACCOUNT_DATA=(async(req, res)=>{
 	const ACCOUNT_ID = req.query.account_id;
@@ -1088,7 +1059,6 @@ module.exports = {
 	FETCH_USER_DATA,
 	LIST_SUPPLIERS_ACCOUNTS_DATA,
 	FETCH_ACCOUNT_DATA,
-	FETCH_ACCOUNTS_DATA,
 	FETCH_SUPPLIER_ACCOUNT_FOR_PAGE,
 	FETCH_ALL_SUPPLIERS_FOR_ADMIN,
 	FETCH_SUPPLIER_ACCOUNT_FOR_ADMIN,

@@ -8,14 +8,14 @@ const SIGNUP_VALIDATION_SCHEMA = yup.object({
 		email:			yup.string().email().matches(EmailRegex).required(),
 		mobile:			yup.string().required(),
 		account_type:	yup.string().required(),
-		password:		yup.string().min(6).max(8).required(),
+		password:		yup.string().min(6).max(16).required(),
 	})
 });
 
 const SIGNIN_VALIDATION_SCHEMA = yup.object({
 	body: yup.object({
 		email:			yup.string().email().matches(EmailRegex).required(),
-		password:		yup.string().min(6).max(8).required(),
+		password:		yup.string().min(6).max(16).required(),
 	})
 });
 
