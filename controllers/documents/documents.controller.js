@@ -81,7 +81,6 @@ const CREATE_NEW_DOCUMENT=(async(req,res)=>{
 	const PRODUCT_ID = req.query.product_id || payload?.product_model_ref;
 
 	try{
-		console.log(payload)
 		const EXISTING_ACCOUNT = await SUPPLIER_MODEL.findOne({_id: payload?.account_id});
 
 		if (!EXISTING_ACCOUNT){
@@ -156,7 +155,6 @@ const FETCH_DOCUMENTS_PRODUCT=(async(req,res)=>{
 			.populate({path:'technology',select: 'title type'})
             .exec();
 		;
-		console.log(EXISTING_DOCUMENTS)
 		return res.status(200).send({
 			error:		false,
 			message:	'success',
@@ -361,7 +359,6 @@ const FETCH_DOCUMENTS_LISTER=(async(req,res)=>{
 			{ $limit: 10 }
 		]);
 		const EXISTING_DOCUMENTS_COUNT = await DOCUMENT_MODEL.countDocuments({user_model_ref: ACCOUNT_ID});
-		console.log(EXISTING_DOCUMENTS)
 		return res.status(200).send({
 			error:		false,
 			message:	'success',
@@ -370,7 +367,6 @@ const FETCH_DOCUMENTS_LISTER=(async(req,res)=>{
 		});
 
 	}catch(error){
-		console.log(error)
 		LOGGER.log('error',`ERROR[FETCH DOCUMENTS PER LISTER] \n\n\n ${error}\n\n\n`);
 		return res.status(500).json({error:true,message:'we could not fetch documents for this account.'});
 	}

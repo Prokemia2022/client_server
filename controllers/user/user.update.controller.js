@@ -1,79 +1,53 @@
-const { LOGGER } = require("../../lib/logger.lib.js");
-const { USER_BASE_MODEL, ACCOUNT_STATUS_MODEL } = require("../../models/USER.model.js");
-const { SUPPLIER_MODEL, CLIENT_MODEL }  = require("../../models/ACCOUNT.model.js");
+/****************************UTILS***************************************/
 const mongoose = require('mongoose');
+/****************************MODELS**************************************/
+const { USER_BASE_MODEL, ACCOUNT_STATUS_MODEL } = require("../../models/USER.model.js");
+const { 
+	DOCUMENT_MODEL, 
+	PRODUCT_MODEL, 
+	REQUEST_MODEL, 
+	MARKET_MODEL 
+} = require("../../models/PRODUCT.model.js");
+const { SUPPLIER_MODEL, CLIENT_MODEL } = require("../../models/ACCOUNT.model.js");
+/****************************CONFIGS*************************************/
+/****************************LIB*****************************************/
+const { LOGGER } = require('../../lib/logger.lib.js');
+const { ValidationError } = require('../../lib/error.lib.js');
+/****************************CONSTANTS***********************************/
+/****************************HELPER FUNCTIONS****************************/
+const IS_PRODUCT_SAVED=(product,saved_products)=>{
+	//console.log(saved_products?.some((product_id)=> product === product_id?.toString()))
+	if(!product){
+		return null
+	}else if (saved_products?.length > 0 && saved_products?.some((product_id)=> product === product_id?.toString())){
+		return true;
+	}else{
+		return false;
+	}
+};
+/****************************FUNCTIONS***********************************/
 
 const UPDATE_USER_DETAILS = (async (req,res)=>{
 	const USER_ID = req.query.user_id;
 	const payload = req.body;
-	console.log(payload)
-	try{
-		const EXISTING_USER = await USER_BASE_MODEL.findById(USER_ID).populate('account_status_model_ref').exec();
-		if (!EXISTING_USER){
-			return res.status(200).json({
-				error:		true,
-				message:	'An account with this id does not exist'
-			});
-		};
-
-		if (EXISTING_USER?.account_status_model_ref?.suspension?.status){
-			return res.status(200).json({
-				error:		true,
-				message:	'This account has been suspended',
-			});
-		};
-
-		if (EXISTING_USER?.account_status_model_ref?.deletion?.status){
-			return res.status(200).json({
-				error:		true,
-				message:	'This account has already been flagged for deletion',
-				date:		EXISTING_USER?.account_status_model_ref?.deletion?.date
-			});
-		};
-		const UPDATE_DOCUMENT = {
+	try{	
+		await USER_BASE_MODEL.updateOne(
+		{_id: USER_ID},
+		{
 			$set:{ 
 				first_name:				payload?.first_name,
 				last_name:				payload?.last_name,
 				mobile:					payload?.mobile,
 				profile_image_url:		payload?.profile_image_url,
 			}
-		};
-		const _QUERY = { _id: USER_ID };
-		await USER_BASE_MODEL.updateOne(_QUERY,UPDATE_DOCUMENT);
-
-		const CLIENT_MODEL_ = await CLIENT_MODEL.findOne({user_model_ref: USER_ID})
-		
-
-		function IS_PRODUCT_SAVED_BY_USER() {
-			let SAVED_PRODUCTS_ARR = CLIENT_MODEL_.products?.map((product)=> product?._id)
-			console.log(SAVED_PRODUCTS_ARR)
-			console.log(SAVED_PRODUCTS_ARR?.some((SAVED_PRODUCTS_ID)=> payload?.products[0] === SAVED_PRODUCTS_ID?.toString()))
-			if(!payload?.products){
-				return null
-			}else if (SAVED_PRODUCTS_ARR?.length > 0 && SAVED_PRODUCTS_ARR?.some((SAVED_PRODUCTS_ID)=> payload?.products[0] === SAVED_PRODUCTS_ID?.toString())){
-				return true;
-			}else{
-				return false;
-			}
-		}
-
-		if (EXISTING_USER?.account_type === 'client'){
-			if (IS_PRODUCT_SAVED_BY_USER()){
-				await CLIENT_MODEL.updateOne(
-					{user_model_ref: USER_ID},
-					{$pull: { products: payload?.products[0]}}
-				)
-			}else if(IS_PRODUCT_SAVED_BY_USER() === false){
-				await CLIENT_MODEL.updateOne({user_model_ref: USER_ID},	{ $push: {"products": {"$each": payload?.products}}});	
-			}
-		}
-		
-		return res.status(200).send({
-            error:null,
-            message:`Account has been successfully updated`
 		});
-	}catch(err){
-		LOGGER.log('error',`Updating user details: ${USER_ID}`,err)
+
+		return res.status(200).send({
+            error:false,
+            message:`Account has been updated successfully`
+		});
+	}catch(error){
+		LOGGER.log('error',`ERROR[UPDATE_USER_DETAILS] ${error}`)
 		return res.status(500).json({
 			error:	true,
 			message:'Failed to update your details. Try again later.'
@@ -81,11 +55,51 @@ const UPDATE_USER_DETAILS = (async (req,res)=>{
 	}
 });
 
+const HANDLE_ACCOUNT_SAVED_PRODUCTS=async()=>{
+	const ACCOUNT_ID = req.query.account_id;
+	const ACCOUNT_TYPE = req.query.account_type;
+	const payload = req.body;
+	try{
+		if (!ACCOUNT_ID || ACCOUNT_TYPE){
+			throw new ValidationError('Missing parameter requirements')
+		};
+		let ACCOUNT_DATA;
+		switch(ACCOUNT_TYPE){
+			case 'client':
+				ACCOUNT_DATA = await CLIENT_MODEL.findOne({user_model_ref: ACCOUNT_ID},{products: 1});
+				if (IS_PRODUCT_SAVED(payload?.products[0],ACCOUNT_DATA?.products)){
+					await CLIENT_MODEL.updateOne({user_model_ref: ACCOUNT_ID},{$pull: { products: payload?.products[0]}})
+				}else{
+					await CLIENT_MODEL.updateOne({user_model_ref: ACCOUNT_ID},	{ $push: {"products": {"$each": payload?.products}}});	
+				}
+				break;
+			default:
+				throw new ValidationError('Missing parameter requirements')
+		}
+
+		return res.status(200).send({
+            error:null,
+            message:`PRODUCTs updated successfully`
+		});
+	}catch(error){
+		LOGGER.log('error',`ERROR[HANDLE_ACCOUNT_SAVED_PRODUCTS]: ${error}`)
+		if (error instanceof ValidationError) {
+            return res.status(400).json({
+                error: true,
+                message: error.message
+            });
+        }
+		return res.status(500).json({
+			error:	true,
+			message:'Failed to update products. Try again later.'
+		});
+	}
+};
+
 const UPDATE_USER_ACCOUNT_DETAILS = (async (req,res)=>{
 	const ACCOUNT_ID = req.query.account_id;
 	const ACCOUNT_TYPE = req.query.account_type;
 	const payload = req.body;
-	console.log(payload)
 	try{
 		const UPDATE_DOCUMENT = {$set:{ 
 			"company.name":				payload?.name,
@@ -95,18 +109,16 @@ const UPDATE_USER_ACCOUNT_DETAILS = (async (req,res)=>{
 			"company.position":			payload?.position,
 			"company.website":			payload?.website,
 			"description":				payload?.description,
-			"technology":				new mongoose.Types.ObjectId(payload?.technology),
-			"industry":					new mongoose.Types.ObjectId(payload?.industry),
+			"technology":				payload?.technology,
+			"industry":					payload?.industry,
 			"status.status":			payload?.status,
 			"status.stage":				payload?.status_stage,
 		}};
-		const _QUERY = { _id : ACCOUNT_ID };
 		switch (ACCOUNT_TYPE){
 			case 'client':
-				await CLIENT_MODEL.updateOne(_QUERY,UPDATE_DOCUMENT);
-				const EXISTING_USER = await CLIENT_MODEL.findOne({_id: ACCOUNT_ID})
+				await CLIENT_MODEL.updateOne({user_model_ref: ACCOUNT_ID},UPDATE_DOCUMENT);
 				
-				await ACCOUNT_STATUS_MODEL.updateOne({user_model_ref: EXISTING_USER?.user_model_ref},{
+				await ACCOUNT_STATUS_MODEL.updateOne({user_model_ref: ACCOUNT_ID},{
 					$set:{
 						approved: payload?.status_stage == 'approved'? true : false,
 						"suspension.status": payload?.status_stage == 'suspended'? true : false,
@@ -114,21 +126,24 @@ const UPDATE_USER_ACCOUNT_DETAILS = (async (req,res)=>{
 				})
 				break;
 			case 'supplier':
-				await SUPPLIER_MODEL.updateOne(_QUERY,UPDATE_DOCUMENT);
+				await SUPPLIER_MODEL.updateOne({user_model_ref: ACCOUNT_ID},UPDATE_DOCUMENT);
 				break;
 			default:
-				return res.status(200).send({
-					error:true,
-					message:`Missing account field`
-				});
+				throw new ValidationError('Missing parameter requirements')
 		}
 		
 		return res.status(200).send({
-            error:null,
+            error:false,
             message:`Account has been successfully updated`
 		});
-	}catch(err){
-		LOGGER.log('error',`[UPDATE ACCOUNT]${ACCOUNT_ID}`,err)
+	}catch(error){
+		LOGGER.log('error',`ERROR[UPDATE_USER_ACCOUNT_DETAILS] ${error}`)
+		if (error instanceof ValidationError) {
+            return res.status(400).json({
+                error: true,
+                message: error.message
+            });
+        }
 		return res.status(500).json({
 			error:	true,
 			message:'Failed to update your details. Try again later.'
@@ -139,5 +154,7 @@ const UPDATE_USER_ACCOUNT_DETAILS = (async (req,res)=>{
 
 module.exports ={
 	UPDATE_USER_DETAILS,
-	UPDATE_USER_ACCOUNT_DETAILS
+	UPDATE_USER_ACCOUNT_DETAILS,
+	HANDLE_ACCOUNT_SAVED_PRODUCTS,
+	IS_PRODUCT_SAVED
 }

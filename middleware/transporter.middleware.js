@@ -13,13 +13,13 @@ let Transporter = nodemailer.createTransport({
     // tls:{
     //     rejectUnauthorized:false
     // }
-    name: 'prokemia.com',
-    host: "mail.prokemia.com",
-    port: 465,
-    secure: true, // true for 465, false for other ports
+    name: process.env.TRANSPORTER_NAME || 'prokemia.com',
+    host: process.env.TRANSPORTER_HOST || "mail.prokemia.com",
+    port: process.env.TRANSPORTER_PORT || 465,
+	secure:  process.env.TRANSPORTER_PORT === 465 ? true : false, // true for 465, false for other ports
     auth: {
-        user: 'prokemia@prokemia.com', // generated ethereal user
-        pass: 'i#9Xx4+6UYvmU4', // generated ethereal password 3vk:NrV497X
+        user: process.env.TRANSPORTER_AUTH_USER || 'prokemia@prokemia.com', // generated ethereal user
+        pass: process.env.TRANSPORTER_AUTH_PASS || 'i#9Xx4+6UYvmU4', // generated ethereal password 3vk:NrV497X
     },
     tls:{
         rejectUnauthorized:false

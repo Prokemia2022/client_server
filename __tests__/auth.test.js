@@ -1,24 +1,14 @@
 // tests/controllers/user.controller.test.js
 
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const request = require('supertest');
 const app = require('../app'); // Your Express app
 const { USER_BASE_MODEL, ACCOUNT_STATUS_MODEL } = require('../models/USER.model');
 const { CLIENT_MODEL, SUPPLIER_MODEL, ADMIN_MODEL } = require('../models/ACCOUNT.model');
 const { HASH_STRING } = require('../middleware/Hash.middleware');
-const { AUTH_TOKEN_GENERATOR } = require('../middleware/token.handler.middleware');
-
-// Mock the logger to prevent console cluttering during tests
-jest.mock('../lib/logger.lib', () => ({
-    LOGGER: {
-        log: jest.fn()
-    }
-}));
-
-// Mock the message broker
-jest.mock('../middleware/MESSAGE_BROKER/PUBLISH_MESSAGE_TO_BROKER', () => ({
-    PUBLISH_MESSAGE_TO_BROKER: jest.fn()
-}));
+const { AUTH_TOKEN_GENERATOR, CODE_TOKEN_GENERATOR } = require('../middleware/token.handler.middleware');
 
 describe('User Controller Tests', () => {
     // Test data
@@ -82,11 +72,11 @@ describe('User Controller Tests', () => {
     beforeEach(async () => {
         // Clear all collections before each test
         await Promise.all([
-            USER_BASE_MODEL.deleteMany({}),
-            ACCOUNT_STATUS_MODEL.deleteMany({}),
-            CLIENT_MODEL.deleteMany({}),
-            SUPPLIER_MODEL.deleteMany({}),
-            ADMIN_MODEL.deleteMany({})
+            USER_BASE_MODEL.deleteMany(),
+            ACCOUNT_STATUS_MODEL.deleteMany(),
+            CLIENT_MODEL.deleteMany(),
+            SUPPLIER_MODEL.deleteMany(),
+            ADMIN_MODEL.deleteMany()
         ]);
     });
 
@@ -101,16 +91,16 @@ describe('User Controller Tests', () => {
             expect(response.body.token).toBeDefined();
 
             // Verify database entries
-            const user = await USER_BASE_MODEL.findOne({ email: mockClientData.email });
-            expect(user).toBeTruthy();
-            expect(user.first_name).toBe(mockClientData.first_name);
+            const user = await USER_BASE_MODEL.findOne({ email: mockClientData?.email });
+            expect(user).toBeDefined();
+            expect(user?.first_name).toBe(mockClientData?.first_name);
 
-            const clientAccount = await CLIENT_MODEL.findOne({ user_model_ref: user._id });
-            expect(clientAccount).toBeTruthy();
+            const clientAccount = await CLIENT_MODEL.findOne({ user_model_ref: user?._id });
+            expect(clientAccount).toBeDefined();
 
-            const accountStatus = await ACCOUNT_STATUS_MODEL.findOne({ user_model_ref: user._id });
-            expect(accountStatus).toBeTruthy();
-            expect(accountStatus.approved).toBe(true);
+            const accountStatus = await ACCOUNT_STATUS_MODEL.findOne({ user_model_ref: user?._id });
+            expect(accountStatus).toBeDefined();
+            expect(accountStatus?.approved).toBe(true);
         });
 
         test('Should successfully create a supplier account', async () => {
@@ -121,9 +111,9 @@ describe('User Controller Tests', () => {
             expect(response.status).toBe(200);
             expect(response.body.error).toBe(false);
 
-            const user = await USER_BASE_MODEL.findOne({ email: mockSupplierData.email });
-            const supplierAccount = await SUPPLIER_MODEL.findOne({ user_model_ref: user._id });
-            expect(supplierAccount.company.name).toBe(mockSupplierData.supplier.supplier_company_name);
+            const user = await USER_BASE_MODEL.findOne({ email: mockSupplierData?.email });
+            const supplierAccount = await SUPPLIER_MODEL.findOne({ user_model_ref: user?._id });
+            expect(supplierAccount?.company?.name).toBe(mockSupplierData.supplier?.supplier_company_name);
         });
 
         test('Should successfully create an admin account', async () => {
@@ -132,9 +122,9 @@ describe('User Controller Tests', () => {
                 .send(mockAdminData);
 
             expect(response.status).toBe(200);
-            const user = await USER_BASE_MODEL.findOne({ email: mockAdminData.email });
-            const adminAccount = await ADMIN_MODEL.findOne({ user_model_ref: user._id });
-            expect(adminAccount.role).toBe(mockAdminData.role);
+            const user = await USER_BASE_MODEL.findOne({ email: mockAdminData?.email });
+            const adminAccount = await ADMIN_MODEL.findOne({ user_model_ref: user?._id });
+            expect(adminAccount?.role).toBe(mockAdminData?.role);
         });
 
 		test('Should reject duplicate email registration', async () => {
@@ -150,7 +140,7 @@ describe('User Controller Tests', () => {
 
             expect(response.status).toBe(400);
             expect(response.body.error).toBe(true);
-            expect(response.body.message).toContain('email already exists');
+            expect(response.body.message).toContain('An account with this email already exists');
         });
 
         test('Should reject invalid account type', async () => {
@@ -187,10 +177,10 @@ describe('User Controller Tests', () => {
                 .post('/api/auth/signup')
                 .send(mockClientData);
 
-            const user = await USER_BASE_MODEL.findOne({ email: mockClientData.email });
-            expect(user.password).not.toBe(mockClientData.password);
+            const user = await USER_BASE_MODEL.findOne({ email: mockClientData?.email });
+            expect(user?.password).not.toBe(mockClientData?.password);
             // Verify that the password is hashed
-            expect(user.password).toMatch(/^\$2[aby]\$\d{1,2}\$[./A-Za-z0-9]{53}$/);
+            expect(user?.password).toMatch(/^\$2[aby]\$\d{1,2}\$[./A-Za-z0-9]{53}$/);
         });
 
         test('Should generate valid JWT token', async () => {
@@ -371,4 +361,80 @@ describe('User Controller Tests', () => {
         });
 
     });
+	describe('HELPER FUNCTIONS', () => {
+		describe('HASH STRING FUNCTION', ()=>{
+			const testString = 'mySecretPassword';
+
+			test('Should return a hashed value', ()=>{
+				const hashedString = HASH_STRING(testString);
+				expect(hashedString).toBeDefined();
+				expect(typeof hashedString).toBe('string');
+			});
+			
+			test('should return a value different from the original string', () => {
+				const hashedString = HASH_STRING(testString);
+				expect(hashedString).not.toBe(testString);
+			});
+
+			test('should produce different hashes for the same input due to salt', () => {
+				const hash1 = HASH_STRING(testString);
+				const hash2 = HASH_STRING(testString);
+				expect(hash1).not.toBe(hash2);
+			});
+
+			test('should match the hashed value when compared using bcrypt.compareSync', () => {
+				const hashedString = HASH_STRING(testString);
+				const isMatch = bcrypt.compareSync(testString, hashedString);
+				expect(isMatch).toBe(true);
+			});
+
+		});
+
+		describe('AUTH_TOKEN_GENERATOR', ()=>{
+			const mockUser = {
+				_id: { toHexString: () => '60d21b2f9eb8f7b1f1a2e30e' },
+				account_type: 'admin',
+				name: 'John Doe'
+			};
+			test('Should return a valid token',()=>{
+				const token = AUTH_TOKEN_GENERATOR(mockUser);
+				expect(token).toBeDefined();
+				expect(typeof token).toBe('string');
+			});
+
+			test('should call jwt.sign with the correct payload and options', () => {
+				const jwtSignSpy = jest.spyOn(jwt, 'sign').mockReturnValue('fake_token');
+
+				const token = AUTH_TOKEN_GENERATOR(mockUser);
+
+				const expectedPayload = {
+					sub: '60d21b2f9eb8f7b1f1a2e30e',
+					name: 'John Doe',
+					account_type: 'admin'
+				};
+
+				const expectedOptions = {
+					expiresIn: 100000,
+					header: {
+						alg: 'HS256',
+						typ: 'JWT'
+					}
+				};
+
+				expect(jwtSignSpy).toHaveBeenCalledWith(expectedPayload, process.env.ACCESS_TOKEN_KEY, expectedOptions);
+				expect(token).toBe('fake_token');
+			})
+		});
+
+		describe('CODE_TOKEN_GENERATOR', ()=>{
+			const testCode = '123456';
+
+			test('Should return a valid token',()=>{
+				const token = CODE_TOKEN_GENERATOR(testCode);
+				expect(token).toBeDefined();
+				expect(typeof token).toBe('string');
+			});
+		});
+
+	})
 });

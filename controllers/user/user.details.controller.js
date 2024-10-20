@@ -289,7 +289,6 @@ const FETCH_SUPPLIER_ACCOUNT_FOR_PAGE=(async(req,res)=>{
 				"status.stage":'approved'
 			})
 		}
-		//console.log(RETURN_DATA)
 		await SUPPLIER_MODEL?.updateOne({_id:SUPPLIER_ID},{"statistics.views": (EXISTING_SUPPLIER?.statistics?.views || 0) + 1 })
 		return res.status(200).send({
 			error:		false,
@@ -785,8 +784,7 @@ const FETCH_CLIENT_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 			account_status_model_ref:	1,
 			createdAt:					1
 		};
-		const EXISTING_CLIENT = await USER_BASE_MODEL.findOne({_id: CLIENT_ID},projection).populate('client_account_model_ref').populate('account_status_model_ref').exec()
-		console.log(EXISTING_CLIENT)
+		const EXISTING_CLIENT = await USER_BASE_MODEL.findOne({_id: CLIENT_ID},projection).populate('client_account_model_ref').populate('account_status_model_ref').exec();
 		if (!EXISTING_CLIENT){
 			return res.status(200).json({
 				error:		true,
@@ -985,8 +983,7 @@ const FETCH_CLIENT_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 				}),
 			},
 
-		}
-		console.log(RETURN_DATA)
+		};
 		return res.status(200).send({
 			error:		false,
 			message:	'success',
@@ -1010,7 +1007,6 @@ const HANDLE_ACCOUNT_DELETION=(async(req,res)=>{
 	 */
 	const ACCOUNT_ID = req.query.account_id;
 	const ACCOUNT_TYPE = req.query.account_type;
-	console.log(ACCOUNT_ID,ACCOUNT_TYPE)
 	let EXISTING_ACCOUNT;
 
 	try{

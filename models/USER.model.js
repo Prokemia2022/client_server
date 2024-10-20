@@ -25,7 +25,7 @@ const USER_BASE_MODEL_SCHEMA = new mongoose.Schema({
 
 // SUBSCRIPTION ACCOUNT DETAILS
 const SUBSCRIPTION_MODEL_SCHEMA = new Schema({
-	account_model_ref:			{ type: mongoose.Schema.Types.ObjectId, ref: "USER"},
+	user_model_ref:			{ type: mongoose.Schema.Types.ObjectId, ref: "USER"},
 	status:						{ type: Boolean, default: false }, // true for accounts that have an active subscription false for accounts that have inactivated: Paused their subscription.
 	plan:						{ type: String, default:'free'},   // free or business or enterprise
 	cycle:						{ type: String, default: 'monthly'}, // Period for billing subscription i.e monthly, semi-annualy, yearly and when the billing will be done 
@@ -45,7 +45,7 @@ const BILLING_MODEL_SCHEMA = new Schema({
 });
 
 const ACCOUNT_STATUS_MODEL_SCHEMA = new Schema({	
-	user_model_ref:		{ type: String },
+	user_model_ref:		{ type: mongoose.Schema.Types.ObjectId, ref: "USER"},
 	suspension:			{ status: Boolean, reason: String },
 	approved:			{ type: Boolean },
 	deletion:			{ status: Boolean, reason: String, date: Date},

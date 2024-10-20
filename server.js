@@ -8,4 +8,8 @@ const port = process.env.PORT || 5000;
 
 server.listen(port, (req,res)=>{
 	LOGGER.log('info',`server listening on http://localhost:${port}`)
-})
+});
+
+// Start the notification worker
+require('./controllers/notifications/worker.js'); 
+// Ensure the worker starts processing notifications

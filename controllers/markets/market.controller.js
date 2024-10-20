@@ -62,7 +62,6 @@ const CREATE_NEW_MARKET = (async(req, res)=>{
 const FETCH_MARKET_LIST=(async(req,res)=>{
 	const type = req.query.type;
 	try{
-		console.log(type)
 		let MARKET_QUERY = {"status.stage": 'approved'}
 		if (type !== 'undefined'){
 			MARKET_QUERY = { type:type,"status.stage": 'approved' };

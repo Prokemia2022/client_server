@@ -4,6 +4,7 @@ const { HASH_STRING } = require("../../middleware/Hash.middleware.js");
 const { PUBLISH_MESSAGE_TO_BROKER } = require("../../middleware/MESSAGE_BROKER/PUBLISH_MESSAGE_TO_BROKER.js");
 const { CODE_TOKEN_GENERATOR } =  require("../../middleware/token.handler.middleware.js");
 const CODE_GENERATOR_FUNC = require("../../middleware/code_generator.js");
+const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
 /****************************CONFIGS***********************************/
 /****************************LIB***************************************/
 const { LOGGER } = require("../../lib/logger.lib.js");
@@ -12,23 +13,41 @@ const { ValidationError } = require('../../lib/error.lib.js')
 const { USER_BASE_MODEL } = require("../../models/USER.model");
 /****************************CONSTANTS*********************************/
 /****************************HELPER FUNCTIONS**************************/
-const handleNewUserNotifications = async (user, CODE, type) => {
-	const PASSWORD_REUEST_CODE_EMAIL_PAYLOAD = {
-		name:	user?.first_name,
-		type:	'password.code.request',
-		email:	user?.email,
-		code:	CODE,
-		sentAt:	new Date(Date.now())
+const HANDLE_SEND_CODE_NOTIFICATIONS = async (user,code) => {
+    const userId = user?._id;
+	const toAdmin = false;
+	const notificationType = 'email';
+
+    const emailPayload = {
+        type:		'password.code.request',
+		subject:	"Password Reset OTP Code",
+        name:		user?.first_name,
+        email:		user?.email,
+        _id:		user?._id,
+		code:		code
     };
-	const PASSWORD_CHANGED_EMAIL_PAYLOAD = {
-		type:	'password.change.success',
-		email:	user?.email,
-		sentAt:	new Date(Date.now())
-	};
     
     // Uncomment when message broker is ready
-    // await PUBLISH_MESSAGE_TO_BROKER(emailPayload, 'EMAIL_QUEUE');
+    await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,emailPayload);
 };
+
+const HANDLE_PASSWORD_CHANGED_NOTIFICATIONS = async (user) => {
+    const userId = user?._id;
+	const toAdmin = false;
+	const notificationType = 'email';
+
+    const emailPayload = {
+        type:		'password.change.success',
+		subject:	"Password Reset Confirmation!",
+        name:		user?.first_name,
+        email:		user?.email,
+        _id:		user?._id
+    };
+    
+    // Uncomment when message broker is ready
+    await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,emailPayload);
+};
+
 /****************************FUNCTION**********************************/
 
 const SEND_OTP_TO_USER = (async(req,res)=>{
@@ -39,7 +58,7 @@ const SEND_OTP_TO_USER = (async(req,res)=>{
 		const CODE = CODE_GENERATOR_FUNC();
 
 		// Handle notifications
-        await handleNewUserNotifications(EXISTING_USER, CODE, 'password.code.request');
+        await HANDLE_SEND_CODE_NOTIFICATIONS(EXISTING_USER,CODE);
 		
         const CODE_TOKEN = CODE_TOKEN_GENERATOR(CODE);
 
@@ -76,7 +95,7 @@ const HANDLE_RESET_PASSWORD =(async(req,res)=>{
 		});
         
 		// Handle notifications
-        await handleNewUserNotifications(EXISTING_USER, 'password.change.success');
+        await HANDLE_PASSWORD_CHANGED_NOTIFICATIONS(EXISTING_USER);
 
 		LOGGER.log('info',`SUCCESS[PASSWORD UPDATE]`);
 

@@ -3,6 +3,7 @@
 const { HASH_STRING } = require('../../middleware/Hash.middleware.js');
 const { AUTH_TOKEN_GENERATOR } = require('../../middleware/token.handler.middleware.js');
 const { PUBLISH_MESSAGE_TO_BROKER } = require('../../middleware/MESSAGE_BROKER/PUBLISH_MESSAGE_TO_BROKER.js');
+const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
 /****************************CONFIGS***********************************/
 /****************************LIB***************************************/
 const { LOGGER } = require('../../lib/logger.lib.js');
@@ -41,16 +42,21 @@ const CREATE_BASE_USER = async (payload, hashedPassword) => {
     });
 };
 
-const handleNewUserNotifications = async (user, payload) => {
+const HANDLE_NOTIFICATIONS = async (user, payload) => {
+	const userId = user?._id;
+	const toAdmin = false;
+	const notificationType = 'email';
+
     const emailPayload = {
         type: 'user.created',
-        name: payload.first_name,
-        email: payload.email,
-        _id: user._id
+		subject: "Welcome to Prokemia",
+        name: payload?.first_name,
+        email: payload?.email,
+        _id: user?._id
     };
     
     // Uncomment when message broker is ready
-    // await PUBLISH_MESSAGE_TO_BROKER(emailPayload, 'EMAIL_QUEUE');
+    await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,emailPayload);
 };
 /****************************FUNCTION**********************************/
 
@@ -75,10 +81,10 @@ const NEW_USER_ACCOUNT = (async(req, res)=>{
         await CREATE_SPECIFIC_ACCOUNT(NEW_BASE_USER, payload);
 
 		// Handle notifications
-        await handleNewUserNotifications(NEW_BASE_USER, payload);
+        await HANDLE_NOTIFICATIONS(NEW_BASE_USER, payload);
 
 		
-		LOGGER.log('info',`[NEW USER: ${payload?.account_type} ACCOUNT CREATED]:${payload?.first_name}`);
+		LOGGER.log('info',`SUCCESS[NEW_USER_ACCOUNT: ${payload?.account_type} ACCOUNT CREATED]:${payload?.first_name}`);
 
 		const auth_token = AUTH_TOKEN_GENERATOR({
 			_id:			NEW_BASE_USER?._id,
@@ -93,7 +99,7 @@ const NEW_USER_ACCOUNT = (async(req, res)=>{
 		});
 
 	}catch(error){
-		LOGGER.log('error',`ERROR[CREATE NEW ACCOUNT]: \n\n\n ${error}\n\n\n`);
+		LOGGER.log('error',`ERROR[NEW_USER_ACCOUNT]: \n\n\n ${error}\n\n\n`);
 		if (error instanceof ValidationError) {
             return res.status(400).json({
                 error: true,
@@ -112,10 +118,10 @@ const CREATE_SPECIFIC_ACCOUNT = async (user, payload) => {
     const accountCreators = {
         admin: () => CREATE_ADMIN_MODEL(user, payload?.role),
         client: () => CREATE_CLIENT_MODEL(user, formatClientData(payload?.client)),
-        supplier: () => CREATE_SUPPLIER_MODEL(user, formatSupplierData(payload?.supplier), payload?.supplier_type)
+        supplier: () => CREATE_SUPPLIER_MODEL(user, formatSupplierData(payload?.supplier), payload?.supplier?.supplier_type)
     };
 
-    const creator = accountCreators[payload.account_type];
+    const creator = accountCreators[payload?.account_type];
     if (creator) {
         await creator();
     }
@@ -164,8 +170,8 @@ const CREATE_ACCOUNT_STATUS = async (user) => {
 async function CREATE_ADMIN_MODEL(user,role){
 	try{
 		const adminAccount = await ADMIN_MODEL.create({
-            user_model_ref: user._id,
-            role: role || 'basic'
+            user_model_ref: user?._id,
+            role: role
         });
 		await USER_BASE_MODEL.updateOne(
             { _id: user._id },
@@ -250,7 +256,7 @@ async function CREATE_SUPPLIER_MODEL(USER,SUPPLIER,TYPE){
 		}else{
 			NEW_ITEM = await SUPPLIER_MODEL.create({
 				user_model_ref:				USER?._id,
-				type:						SUPPLIER?.type || 'supplier',
+				type:						TYPE || 'supplier',
 				description:				SUPPLIER?.description || '',
 				company:					{
 					name:					SUPPLIER?.name || '',
@@ -265,7 +271,7 @@ async function CREATE_SUPPLIER_MODEL(USER,SUPPLIER,TYPE){
 			});
 		}
 		await USER_BASE_MODEL.updateOne(
-            { _id: USER._id },
+            { _id: USER?._id },
             { supplier_account_model_ref: NEW_ITEM?._id }
         );
 	}catch(error){

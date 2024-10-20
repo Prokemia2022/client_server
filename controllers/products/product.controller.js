@@ -1,21 +1,47 @@
-const { LOGGER } = require("../../lib/logger.lib.js");
-const { USER_BASE_MODEL } = require("../../models/USER.model.js");
-const { PRODUCT_MODEL, DOCUMENT_MODEL, MARKET_MODEL } = require("../../models/PRODUCT.model.js");
-const { CLIENT_MODEL, SUPPLIER_MODEL } = require("../../models/ACCOUNT.model.js");
+/****************************UTILS***************************************/
 const mongoose = require('mongoose');
+/****************************MODELS**************************************/
+const { USER_BASE_MODEL } = require("../../models/USER.model.js");
+const { 
+	DOCUMENT_MODEL, 
+	PRODUCT_MODEL, 
+	REQUEST_MODEL, 
+	MARKET_MODEL 
+} = require("../../models/PRODUCT.model.js");
+const { SUPPLIER_MODEL, CLIENT_MODEL } = require("../../models/ACCOUNT.model.js");
+/****************************CONFIGS*************************************/
+/****************************LIB*****************************************/
+const { LOGGER } = require('../../lib/logger.lib.js');
+const { ValidationError } = require('../../lib/error.lib.js');
+/****************************CONSTANTS*********************************/
+/****************************HELPER FUNCTIONS**************************/
+
+const HANDLE_NOTIFICATIONS = async (user) => {
+    const emailPayload = {
+        type:	'flag.user.account',
+        name:	user?.first_name,
+        email:	user?.email,
+        _id:	user?._id
+    };
+    
+    // Uncomment when message broker is ready
+    // await PUBLISH_MESSAGE_TO_BROKER(emailPayload, 'EMAIL_QUEUE');
+};
+/****************************FUNCTIONS***********************************/
 
 const CREATE_NEW_PRODUCT = (async(req,res)=>{
 	const payload = req.body;
-	const USER_ID = req.user.sub;
-	const USER_QUERY = { _id: USER_ID };
+	const ACCOUNT_ID = req.query?.account_id;
+	const ACCOUNT_TYPE = req.query?.account_type;
 	try{
-		const EXISTING_USER = await USER_BASE_MODEL.findOne(USER_QUERY).populate('account_status_model_ref').exec();
-
+		if (!ACCOUNT_ID || !ACCOUNT_TYPE){
+			throw new ValidationError('Missing parameter requirements')
+		}
 		let EXISTING_ACCOUNT;
-		const ACCOUNT_QUERY = { user_model_ref : USER_ID };
-		const PROJECTION = { user_model_ref: 1, products: 1 };
+		const ACCOUNT_QUERY = { user_model_ref : ACCOUNT_ID,  };
+		const PROJECTION = { user_model_ref: 1, products: 1, status: 1 };
 		
-		switch (EXISTING_USER?.account_type){
+		switch (ACCOUNT_TYPE){
 			case 'client':
 				EXISTING_ACCOUNT = await CLIENT_MODEL.findOne(ACCOUNT_QUERY,PROJECTION)
 				break;
@@ -26,17 +52,17 @@ const CREATE_NEW_PRODUCT = (async(req,res)=>{
 				//EXISTING_ACCOUNT = await SUPPLIER_MODEL.findOne(ACCOUNT_QUERY,PROJECTION)
 				break;
 			default:
-				return res.status(200).json({
-					error:		true,
-					message:	'You dont have an active lister account, set up one now',
-				});
+				throw new ValidationError('Missing parameter requirements')
 		};
 
 		if (!EXISTING_ACCOUNT){
-			return res.status(200).json({
-				error:		true,
-				message:	'You dont have an active lister account, set up one now',
-			});
+			throw new ValidationError('You dont have an active lister account, set up one now')
+		};
+		if (EXISTING_ACCOUNT?.status.stage === 'pending'){
+			throw new ValidationError('Your lister account is yet to be approved.')
+		};
+		if (EXISTING_ACCOUNT?.status.stage === 'suspended'){
+			throw new ValidationError('Your lister account has been rejected.Contact support')
 		};
 
 		const NEW_PRODUCT_ITEM = await PRODUCT_MODEL.create({
@@ -62,7 +88,10 @@ const CREATE_NEW_PRODUCT = (async(req,res)=>{
 								date:		new Date(Date.now())
 							},
 			sponsored:		{ status: payload?.sponsored?.status },
-			views:			0
+			statistics:		{
+								views: 0,
+								search: 0
+							},
 		});
 
 		const options = { ordered: true };
@@ -86,7 +115,6 @@ const CREATE_NEW_PRODUCT = (async(req,res)=>{
 			DOCUMENTS.push(record);
 		};
 		const NEW_DOCUMENTS = await DOCUMENT_MODEL.insertMany(DOCUMENTS, options);
-		console.log(NEW_DOCUMENTS);
 
 		EXISTING_ACCOUNT?.products?.push(NEW_PRODUCT_ITEM?._id);
 		EXISTING_ACCOUNT?.documents?.push(NEW_DOCUMENTS_TEMP_ARR);
@@ -105,6 +133,7 @@ const CREATE_NEW_PRODUCT = (async(req,res)=>{
 			documents: { $each: NEW_DOCUMENTS_TEMP_ARR },
 			products: { $each: [NEW_PRODUCT_ITEM?._id] } 
 		} });
+		LOGGER.log('info',`SUCCESS[CREATE_NEW_PRODUCT]: ${NEW_PRODUCT_ITEM?.name}`);
 
 		return res.status(200).send({
 			error: false,
@@ -112,7 +141,13 @@ const CREATE_NEW_PRODUCT = (async(req,res)=>{
 		})
 
 	}catch(error){
-		LOGGER.log('error',`[NEW PRODUCT]{USER: ${USER_ID}. \n\n\n ${error}\n\n\n}`);
+		LOGGER.log('error',`ERROR[CREATE_NEW_PRODUCT]: ${error}`);
+		if (error instanceof ValidationError) {
+            return res.status(400).json({
+                error: true,
+                message: error.message
+            });
+        }
 		return res.status(500).json({
 			error:true,
 			message:'we could not create this product.'
@@ -123,8 +158,6 @@ const CREATE_NEW_PRODUCT = (async(req,res)=>{
 const FETCH_PRODUCTS =(async(req,res)=>{
 	const QUERY = req.query.query;
 	try{
-		
-		console.log(QUERY)
 		
 		const EXISTING_PRODUCTS = await PRODUCT_MODEL.aggregate([
 		
@@ -250,7 +283,6 @@ const FETCH_PRODUCTS =(async(req,res)=>{
 				}
 			},
 		]);
-		console.log(EXISTING_PRODUCTS)
 		return res.status(200).send({
 			error:		false,
 			message:	'success',

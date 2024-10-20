@@ -43,7 +43,7 @@ const AUTH_TOKEN_GENERATOR = (user)=>{
         );
         return AUTH_TOKEN;
     }catch(err){
-		LOGGER.log('error',`System Error[on creating authentication token] ERROR: ${err}`);
+		LOGGER.log('error',`ERROR[AUTH_TOKEN_GENERATOR]: ${err}`);
         throw new Error('AUTH TOKEN generation error');
     }
 
