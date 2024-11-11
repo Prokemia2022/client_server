@@ -2,7 +2,7 @@ const { NOTIFICATION_MODEL } =  require('../../models/UTIL.model.js');
 const { LOGGER } = require("../../lib/logger.lib.js");
 const cron = require('node-cron');
 
-const { HANDLE_EMAIL_NOTIFICATIONS } = require('./index.js')
+const { HANDLE_EMAIL_NOTIFICATIONS, SEND_FCM_NOTIFICATION } = require('./index.js')
 const MAX_RETRY_COUNT = 5;
 const RETRY_DELAY = 3000; // Delay between retries in milliseconds
 
@@ -15,10 +15,13 @@ const PROCEESS_NOTIFICATION_QUEUE = async () => {
 		try{
 			switch (notification.notificationType){
 				case 'fcm':
-					//await SEND_FCM_NOTIFICATION(notification)
+					await SEND_FCM_NOTIFICATION(notification)
 					break;
 				case 'email':
-					//await HANDLE_EMAIL_NOTIFICATIONS(notification)
+					await HANDLE_EMAIL_NOTIFICATIONS(notification)
+					break;
+				case 'in-app':
+					
 					break;
 				case 'sms':
 					break;

@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 /****************************MIDDLEWARES*******************************/
 const { AUTH_TOKEN_GENERATOR } = require('../../middleware/token.handler.middleware.js');
 const { PUBLISH_MESSAGE_TO_BROKER } = require("../../middleware/MESSAGE_BROKER/PUBLISH_MESSAGE_TO_BROKER.js");
+const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
 /****************************MODELS************************************/
 const { 
 	USER_BASE_MODEL, 
@@ -13,23 +14,28 @@ const { LOGGER } = require("../../lib/logger.lib.js");
 const { ValidationError } = require('../../lib/error.lib.js')
 /****************************HELPER FUNCTIONS**************************/
 const VALIDATE_ACCOUNT_PASSWORD = async(_QUERY,password) => {
-	const EXISTING_USER = await USER_BASE_MODEL.findOne(_QUERY,{first_name: 1,last_name: 1,account_type: 1,password: 1})
+	const EXISTING_USER = await USER_BASE_MODEL.findOne(_QUERY,{first_name: 1,last_name: 1,account_type: 1,password: 1,email:1})
 	if(!bcrypt.compareSync(password, EXISTING_USER?.password)){
 		throw new ValidationError(`wrong credentials, password or email`);
 	}
 	return EXISTING_USER
 };
 
-const handleNewUserNotifications = async (user) => {
+const HANDLE_NOTIFICATIONS = async (user) => {
+	const userId = user?._id;
+	const toAdmin = false;
+	const notificationType = 'email';
+
     const emailPayload = {
-        type:	'session.created',
-        name:	user.first_name,
-        email:	user.email,
-        _id:	user._id
+        type: 'user.signedin',
+		subject: "Welcome back to Prokemia",
+        name: user?.first_name,
+        email: user?.email,
+        _id: user?._id
     };
     
     // Uncomment when message broker is ready
-    // await PUBLISH_MESSAGE_TO_BROKER(emailPayload, 'EMAIL_QUEUE');
+    await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,emailPayload);
 };
 
 /****************************FUNCTION**********************************/
@@ -46,7 +52,7 @@ const SIGN_IN_USER=(async(req,res)=>{
 		});
 
 		// Handle notifications
-        await handleNewUserNotifications(USER);
+        await HANDLE_NOTIFICATIONS(USER);
 		
 		LOGGER.log('info',`[USER SIGNED IN]`);
 		// UPDATE ACCOUNT ACTIVITY STATUS

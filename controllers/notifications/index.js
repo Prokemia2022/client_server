@@ -11,8 +11,10 @@ const {
 	FLAG_ACCOUNT_DELETION_EMAIL_TEMPLATE,
 	ACCOUNT_DELETION_EMAIL_TEMPLATE,
 	PASSWORD_RESET_CODE_EMAIL_TEMPLATE,
-	PASSWORD_CHANGED_EMAIL_TEMPLATE
+	PASSWORD_CHANGED_EMAIL_TEMPLATE,
 } = require('../../lib/email_templates/auth.email_template.js');
+const messaging = require("../../lib/firebaseConfig.js");
+const { REQUEST_CREATED_EMAIL_TEMPLATE, NOTIFY_SUPPLIER_REQUEST_CREATED_EMAIL_TEMPLATE } = require("../../lib/email_templates/request.email_template.js");
 
 const QUEUE_NOTIFICATION=async(userId, toAdmin, notificationType, payload)=>{
 	try{
@@ -24,7 +26,7 @@ const QUEUE_NOTIFICATION=async(userId, toAdmin, notificationType, payload)=>{
 			status: { sent: false, read: false, status: 'pending'},
 			retryCount: 0,
 			createdAt: new Date()
-		});
+		}); 
 		
 		LOGGER.log('info',`SUCCESS[QUEUE_NOTIFICATION]`);
 		return
@@ -57,14 +59,30 @@ async function SAVE_NOTIFICATION(notification) {
 };
 
 // Function to get unread notifications for a user
-async function FETCH_UNREAD_NOTIFICATIONS(users) {
+async function FETCH_UNREAD_NOTIFICATIONS(req, res, next) {
 	try{
-		return await NOTIFICATION_MODEL.find({ users: { $in: users }, $or: [{"status.read": false},{"status.sent": false}]}).sort({ createdAt: -1 });
+		const userId = req.query?.account_id;
+		if(!userId){
+            throw new ValidationError('User ID not found')
+        };
+		const query = {$or: [{"status.read": false}]};
+		const EXISTING_NOTIFICATIONS = await NOTIFICATION_MODEL.find({userId: userId});
+		const EXISTING_NOTIFICATIONS_COUNT = EXISTING_NOTIFICATIONS?.length;
+		return res.status(200).send({
+			error: false,
+			message: 'success',
+			data:	EXISTING_NOTIFICATIONS,
+			count:	EXISTING_NOTIFICATIONS_COUNT
+		});
 	}catch(error){
 		LOGGER.log('error',`ERROR[FETCH_UNREAD_NOTIFICATIONS_NOTIFICATION]:${error}`);
-		throw new Error('The users notifications could not be retrieved')
+		//throw new Error('The users notifications could not be retrieved')
+		return res.status(500).send({
+			error: true,
+			message: 'failed to fetch notifications',
+		});
 	}
-}
+};
 
 // Function to mark notifications as read
 async function markNotificationsAsRead(notificationIds) {
@@ -87,6 +105,9 @@ async function HANDLE_EMAIL_NOTIFICATIONS(payload){
 		case 'user.created':
 			_TEMPLATE = WELCOME_EMAIL_TEMPLATE(payload?.payload);
 			break;
+		case 'user.signedin':
+			_TEMPLATE = SIGN_IN_EMAIL_TEMPLATE(payload?.payload);
+			break;
 		case 'flag.user.account':
 			_TEMPLATE = FLAG_ACCOUNT_DELETION_EMAIL_TEMPLATE(payload?.payload);
 			break;
@@ -98,6 +119,12 @@ async function HANDLE_EMAIL_NOTIFICATIONS(payload){
 			break;
 		case 'password.change.success':
 			_TEMPLATE = PASSWORD_CHANGED_EMAIL_TEMPLATE(payload?.payload);
+			break;
+		case 'request.created':
+			_TEMPLATE = REQUEST_CREATED_EMAIL_TEMPLATE(payload?.payload?.body);
+			break;
+		case 'supplier.request.created':
+			_TEMPLATE = NOTIFY_SUPPLIER_REQUEST_CREATED_EMAIL_TEMPLATE(payload?.payload?.body);
 			break;
 		default:
 			throw new ValidationError(`Invalid email type`);
@@ -123,10 +150,34 @@ async function HANDLE_EMAIL_NOTIFICATIONS(payload){
 	}
 }
 
+async function SEND_FCM_NOTIFICATION(notification){
+	const message = {
+		notification: {
+		  title: notification?.payload?.subject,
+		  body:  notification?.payload?.body?.message,
+		},
+		webpush: {
+			fcm_options: {
+			  link: notification?.payload?.body?.action_url, // URL you want to open on click
+			}
+		},
+		token: notification?.payload?.body?.token,
+	};
+	messaging.send(message)
+	.then((response) => {
+		LOGGER.log('info','SUCCESS[SEND_FCM_NOTIFICATION]:', response);
+	})
+	.catch((error) => {
+		console.log('error',`ERROR[SEND_FCM_NOTIFICATION]:${error}`);
+		throw new Error(error);
+	});
+}
+
 module.exports = {
 	SAVE_NOTIFICATION,
 	FETCH_UNREAD_NOTIFICATIONS,
 	markNotificationsAsRead,
 	QUEUE_NOTIFICATION,
-	HANDLE_EMAIL_NOTIFICATIONS
+	HANDLE_EMAIL_NOTIFICATIONS,
+	SEND_FCM_NOTIFICATION
 };

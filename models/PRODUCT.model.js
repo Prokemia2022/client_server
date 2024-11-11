@@ -127,7 +127,7 @@ const REQUEST_MODEL_SCHEMA = new Schema({
 	},
 	status: {
 		status: Boolean, 
-		stage: String, //pending,approval,suspension,draft 
+		stage: String, //pending,approval,suspension,draft/deletion 
 		comment: String, 
 		date: Date, 
 		approver: mongoose.Schema.Types.ObjectId 

@@ -18,7 +18,8 @@ const {
 } = require("../controllers/user/user.details.controller");
 const { 
 	UPDATE_USER_DETAILS, 
-	UPDATE_USER_ACCOUNT_DETAILS 
+	UPDATE_USER_ACCOUNT_DETAILS, 
+	HANDLE_ACCOUNT_SAVED_PRODUCTS
 } = require("../controllers/user/user.update.controller.js");
 const { NEW_USER_ACCOUNT } = require('../controllers/auth/auth.signup.controller.js')
 const { HANDLE_FLAG_ACCOUNT_DELETION, HANDLE_ACCOUNT_DELETION } = require('../controllers/user/user.delete.controller.js')
@@ -44,8 +45,14 @@ router.put(
 	'/update/details', 
 	AUTHENTICATE_TOKEN, 
 	USER_API_AUTHORIZATION,
-	SCHEMA_VALIDATOR(UPDATE_USER_DETAILS_VALIDATION_SCHEMA), 
+	// SCHEMA_VALIDATOR(UPDATE_USER_DETAILS_VALIDATION_SCHEMA), 
 	UPDATE_USER_DETAILS
+);
+router.put(
+	'/update/products/saved', 
+	AUTHENTICATE_TOKEN, 
+	USER_API_AUTHORIZATION,
+	HANDLE_ACCOUNT_SAVED_PRODUCTS
 );
 
 router.put(

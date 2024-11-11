@@ -55,12 +55,12 @@ const UPDATE_USER_DETAILS = (async (req,res)=>{
 	}
 });
 
-const HANDLE_ACCOUNT_SAVED_PRODUCTS=async()=>{
+const HANDLE_ACCOUNT_SAVED_PRODUCTS=async(req,res)=>{
 	const ACCOUNT_ID = req.query.account_id;
 	const ACCOUNT_TYPE = req.query.account_type;
 	const payload = req.body;
 	try{
-		if (!ACCOUNT_ID || ACCOUNT_TYPE){
+		if (!ACCOUNT_ID || !ACCOUNT_TYPE){
 			throw new ValidationError('Missing parameter requirements')
 		};
 		let ACCOUNT_DATA;

@@ -1,38 +1,72 @@
+/****************************UTILS***************************************/
+/****************************MODELS**************************************/
 const { USER_BASE_MODEL } = require('../../models/USER.model.js');
-const { REQUEST_MODEL } = require("../../models/PRODUCT.model.js");
+const { REQUEST_MODEL, PRODUCT_MODEL } = require("../../models/PRODUCT.model.js");
 const { SUPPLIER_MODEL } = require("../../models/ACCOUNT.model.js");
-const {	PRODUCT_MODEL } = require("../../models/PRODUCT.model.js");
+/****************************CONFIGS*************************************/
+/****************************LIB*****************************************/
 const { LOGGER } = require('../../lib/logger.lib.js');
+const { ValidationError } = require('../../lib/error.lib.js');
+const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
+/****************************CONSTANTS*********************************/
+/****************************HELPER FUNCTIONS**************************/
+const HANDLE_NEW_REQUEST_NOTIFICATIONS = async (user,toAdmin,payload,action_url,notificationType,email_type) => {
+	const userId = user?._id;
+	const FCM_TOKEN = user?.fcm_token;
+	let notificationPayload;
+	switch (notificationType) {
+		case 'fcm':
+			notificationPayload = {
+				type:	 'sample.request.created',
+				subject: `Hey there, Your ${payload?.type} request has been created.`,
+				body:     {
+					action_url: 	action_url,
+					date: 			payload?.createdAt,
+					message: 		'Waiting to be reviewed!',
+					type: 			'request',
+					token: 			FCM_TOKEN
+				}
+			};
+		case 'in-app':
+			notificationPayload = {
+				type:	 'sample.request.created',
+				subject: `Hey there, Your ${payload?.type} request has been created.`,
+				body:     {
+					action_url: 	action_url,
+					date: 			payload?.createdAt,
+					message: 		'Waiting to be reviewed!',
+					type: 			'request',
+					token: 			user?.fcm_token
+				}
+			};
+		case 'email':
+			notificationPayload = {
+				type:	 			email_type,
+				subject: 			`Your ${payload?.type} request has been created.`,
+				email:				user?.email,
+				body:{
+					name:			user?.first_name,
+					_id:			payload?._id,
+					product_id:		payload?.product_id,
+					product_name:	payload?.product_name,
+					amount:			payload?.amount,
+					units:			payload?.units,
+					type:			payload?.type,
+					action_url:	    action_url
+				}
+			};
+			await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,notificationPayload);
+		default:
+			return;
+	};
+};
 
 const CREATE_REQUEST=(async(req, res)=>{
-	let ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || req.connection.socket.remoteAddress).split(",")[0];
-	const USER_ID = req.user.sub;
-	const USER_QUERY = { _id: USER_ID };
+	const ACCOUNT_ID = req.user.sub;
 	const payload = req.body;
 
 	try{
-		const EXISTING_USER = await USER_BASE_MODEL.findOne(USER_QUERY).populate('account_status_model_ref').exec();
-		if (!EXISTING_USER){
-			return res.status(200).json({
-				error:		true,
-				message:	'An account with this id does not exist'
-			});
-		};
-
-		if (EXISTING_USER?.account_status_model_ref?.suspension?.status){
-			return res.status(200).json({
-				error:		true,
-				message:	'This account has been suspended',
-			});
-		};
-
-		if (EXISTING_USER?.account_status_model_ref?.deletion?.status){
-			return res.status(200).json({
-				error:		true,
-				message:	'This account has already been flagged for deletion',
-				date:		EXISTING_USER?.account_status_model_ref?.deletion?.date
-			});
-		};
+		const EXISTING_USER = await USER_BASE_MODEL.findOne({_id: ACCOUNT_ID}).populate('account_status_model_ref').exec();
 		const EXISTING_PRODUCT = await PRODUCT_MODEL.findById(payload?.product_model_ref);
 		
 		if(!EXISTING_PRODUCT?.status?.status && (EXISTING_PRODUCT?.status?.stage === 'suspension')){
@@ -42,7 +76,7 @@ const CREATE_REQUEST=(async(req, res)=>{
 			});
 		};
 
-		const EXISTING_SUPPLIER = await SUPPLIER_MODEL.findById(payload?.supplier_model_ref);
+		const EXISTING_SUPPLIER = await SUPPLIER_MODEL.findById(payload?.supplier_model_ref).populate({path: 'user_model_ref',select: 'email first_name'}).exec();
 		
 		if(!EXISTING_SUPPLIER){
 			return res.status(200).json({
@@ -70,6 +104,7 @@ const CREATE_REQUEST=(async(req, res)=>{
 				date:				new Date(Date.now())
 			},
 		});
+		
 
 		/*** Send Notifications to respective referees
 		 * Requestor
@@ -77,6 +112,17 @@ const CREATE_REQUEST=(async(req, res)=>{
 		 * Admin
 		 *
 		 */
+		NEW_REQUEST_ITEM.product_id = EXISTING_PRODUCT?._id;
+		NEW_REQUEST_ITEM.product_name = EXISTING_PRODUCT?.name;
+		// Send Email to client/requestor
+		let action_url;
+		action_url = `https://prokemia.com/dashboard/client/requests/view?request_id=${NEW_REQUEST_ITEM?._id}`;
+		await HANDLE_NEW_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',NEW_REQUEST_ITEM,action_url,'email','request.created');
+		// send email to lister
+		EXISTING_SUPPLIER.email = EXISTING_SUPPLIER?.user_model_ref?.email;
+		EXISTING_SUPPLIER.first_name = EXISTING_SUPPLIER?.user_model_ref?.first_name;
+		action_url = `https://prokemia.com/dashboard/supplier/requests/view?request_id=${NEW_REQUEST_ITEM?._id}`;
+		await HANDLE_NEW_REQUEST_NOTIFICATIONS(EXISTING_SUPPLIER,'false',NEW_REQUEST_ITEM,action_url,'email','supplier.request.created');
 
 		/** add requests to respective models
 		 * supplier
@@ -99,11 +145,11 @@ const CREATE_REQUEST=(async(req, res)=>{
 
 		return res.status(200).send({
 			error: false,
-			message: 'Product created successfully'
+			message: 'Request created successfully'
 		})
 
 	}catch(error){
-		LOGGER.log('error',`${ip} - System Error: Creating a new request. USER: ${USER_ID}. Error: \n\n\n ${error}\n\n\n`);
+		LOGGER.log('error',`ERROR[CREATE_REQUEST]: \n\n\n ${error}\n\n\n`);
 		return res.status(500).json({error:true,message:'we could not create this request.'});
 	}
 
@@ -245,7 +291,7 @@ const UPDATE_REQUEST=(async(req,res)=>{
 		LOGGER.log('error',`System Error: Request update failed. USER: ${USER_ID}. Error: \n\n\n ${error}\n\n\n`);
 		return res.status(500).json({error:true,message:'we could not update this request.'});
 	}
-})
+});
 
 const DELETE_REQUEST=(async(req,res)=>{
 	const USER_ID = req.user.sub;

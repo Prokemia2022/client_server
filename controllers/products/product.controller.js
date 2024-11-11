@@ -13,19 +13,47 @@ const { SUPPLIER_MODEL, CLIENT_MODEL } = require("../../models/ACCOUNT.model.js"
 /****************************LIB*****************************************/
 const { LOGGER } = require('../../lib/logger.lib.js');
 const { ValidationError } = require('../../lib/error.lib.js');
+const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
 /****************************CONSTANTS*********************************/
 /****************************HELPER FUNCTIONS**************************/
+const HANDLE_NEW_PRODUCT_ADMIN_NOTIFICATIONS = async (user,payload) => {
+	const userId = user?._id;
+	const toAdmin = true;
+	const notificationType = '';	
 
-const HANDLE_NOTIFICATIONS = async (user) => {
-    const emailPayload = {
-        type:	'flag.user.account',
-        name:	user?.first_name,
-        email:	user?.email,
-        _id:	user?._id
+    const notificationPayload = {
+        type:	 'product.created',
+		subject: `Hey there, A new product has been created.`,
+		body:     {
+			action_url: 	`http://localhost:3000/dashboard/admin/products/product?product_id=${payload._id}`,
+			date: 			payload?.createdAt,
+			message: 		'Waiting to be reviewed!',
+			token:			user?.fcm_token,
+			type: 			'product'
+		}
+    };    
+    // Uncomment when message broker is ready
+    await QUEUE_NOTIFICATION(userId,toAdmin,'fcm',notificationPayload);
+    await QUEUE_NOTIFICATION(userId,toAdmin,'in-app',notificationPayload);
+};
+const HANDLE_NEW_PRODUCT_LISTER_NOTIFICATIONS = async (userId,payload) => {
+	const toAdmin = false;
+	const notificationType = 'in-app';
+
+    const notificationPayload = {
+        type:	 'product.created',
+		subject: `Hey there, Your product has been created.`,
+		body:     {
+			action_url: 	`http://localhost:3000/dashboard/supplier/products/product?product_id=${payload._id}`,
+			date: 			payload?.createdAt,
+			message: 		'Waiting to be reviewed!',
+			type: 			'product'
+		}
     };
+
     
     // Uncomment when message broker is ready
-    // await PUBLISH_MESSAGE_TO_BROKER(emailPayload, 'EMAIL_QUEUE');
+    await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,notificationPayload);
 };
 /****************************FUNCTIONS***********************************/
 
@@ -33,6 +61,7 @@ const CREATE_NEW_PRODUCT = (async(req,res)=>{
 	const payload = req.body;
 	const ACCOUNT_ID = req.query?.account_id;
 	const ACCOUNT_TYPE = req.query?.account_type;
+	console.log(ACCOUNT_ID, ACCOUNT_TYPE)
 	try{
 		if (!ACCOUNT_ID || !ACCOUNT_TYPE){
 			throw new ValidationError('Missing parameter requirements')
@@ -134,6 +163,13 @@ const CREATE_NEW_PRODUCT = (async(req,res)=>{
 			products: { $each: [NEW_PRODUCT_ITEM?._id] } 
 		} });
 		LOGGER.log('info',`SUCCESS[CREATE_NEW_PRODUCT]: ${NEW_PRODUCT_ITEM?.name}`);
+
+		// send to admin
+		const ADMIN_TO_RECEIVE_NOTIFICATION = await USER_BASE_MODEL?.find({account_type:'admin'},{first_name:1,fcm_token:1});
+		for (const item of ADMIN_TO_RECEIVE_NOTIFICATION){
+			await HANDLE_NEW_PRODUCT_ADMIN_NOTIFICATIONS(item,NEW_PRODUCT_ITEM);
+		};
+		await HANDLE_NEW_PRODUCT_LISTER_NOTIFICATIONS(ACCOUNT_ID,NEW_PRODUCT_ITEM);
 
 		return res.status(200).send({
 			error: false,
@@ -293,7 +329,6 @@ const FETCH_PRODUCTS =(async(req,res)=>{
 		return res.status(500).json({error:true,message:'we could not fetch products.'});
 	}
 });
-
 
 const FETCH_PRODUCTS_BY_OWNER =(async(req,res)=>{
 	const ACCOUNT_ID = req.query.account_id;
@@ -557,8 +592,6 @@ const UPDATE_PRODUCT_DATA = (async(req,res)=>{
 		return res.status(500).json({error:true,message:'we could not edit this product.'});
 	}
 });
-
-
 
 const DELETE_PRODUCT_BY_OWNER = (async(req,res)=>{
 	let ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || req.connection.socket.remoteAddress).split(",")[0];

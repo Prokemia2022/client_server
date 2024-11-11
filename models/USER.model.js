@@ -21,6 +21,7 @@ const USER_BASE_MODEL_SCHEMA = new mongoose.Schema({
 	// notfication information
 	// status information
 	account_status_model_ref:		{ type: mongoose.Schema.Types.ObjectId, ref: 'ACCOUNT_STATUS'},
+	fcm_token:						{ type: String}
 },{ timestamps: true });
 
 // SUBSCRIPTION ACCOUNT DETAILS

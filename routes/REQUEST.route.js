@@ -8,8 +8,9 @@ const {
 	UPDATE_REQUEST,
 	DELETE_REQUEST
 } = require("../controllers/requests/request.controller.js");
+const { USER_API_AUTHORIZATION } = require("../middleware/user.handler.middleware.js");
 
-router.post('/create', AUTHENTICATE_TOKEN , CREATE_REQUEST);
+router.post('/create', AUTHENTICATE_TOKEN , USER_API_AUTHORIZATION, CREATE_REQUEST);
 router.get('/data', AUTHENTICATE_TOKEN, FETCH_ALL_REQUESTS);
 router.get('/details', AUTHENTICATE_TOKEN, FETCH_REQUEST_DATA);
 router.put('/update', AUTHENTICATE_TOKEN, UPDATE_REQUEST);

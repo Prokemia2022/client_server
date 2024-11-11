@@ -2,17 +2,6 @@ const nodemailer = require("nodemailer");
 require("dotenv").config()
 
 let Transporter = nodemailer.createTransport({
-    // name: process.env.TRANSPORTER_NAME,
-    // host: process.env.TRANSPORTER_HOST,
-    // port: process.env.TRANSPORTER_PORT,
-    // secure: false, // true for 465, false for other ports
-    // auth: {
-    //     user: process.env.TRANSPORTER_AUTH_USER,
-    //     pass: process.env.TRANSPORTER_AUTH_PASS,
-    // },
-    // tls:{
-    //     rejectUnauthorized:false
-    // }
     name: process.env.TRANSPORTER_NAME || 'prokemia.com',
     host: process.env.TRANSPORTER_HOST || "mail.prokemia.com",
     port: process.env.TRANSPORTER_PORT || 465,
@@ -24,8 +13,8 @@ let Transporter = nodemailer.createTransport({
     tls:{
         rejectUnauthorized:false
     },
-    // debug: true,
-    // logger: true,
+    //debug: true,
+    logger: true,
 });
 
 module.exports = Transporter;
