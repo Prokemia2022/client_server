@@ -16,58 +16,17 @@ const { ValidationError } = require('../../lib/error.lib.js');
 const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
 /****************************CONSTANTS*********************************/
 /****************************HELPER FUNCTIONS**************************/
-const HANDLE_NEW_PRODUCT_ADMIN_NOTIFICATIONS = async (user,payload) => {
-	const userId = user?._id;
-	const toAdmin = true;
-	const notificationType = '';	
-
-    const notificationPayload = {
-        type:	 'product.created',
-		subject: `Hey there, A new product has been created.`,
-		body:     {
-			action_url: 	`http://localhost:3000/dashboard/admin/products/product?product_id=${payload._id}`,
-			date: 			payload?.createdAt,
-			message: 		'Waiting to be reviewed!',
-			token:			user?.fcm_token,
-			type: 			'product'
-		}
-    };    
-    // Uncomment when message broker is ready
-    await QUEUE_NOTIFICATION(userId,toAdmin,'fcm',notificationPayload);
-    await QUEUE_NOTIFICATION(userId,toAdmin,'in-app',notificationPayload);
-};
-const HANDLE_NEW_PRODUCT_LISTER_NOTIFICATIONS = async (userId,payload) => {
-	const toAdmin = false;
-	const notificationType = 'in-app';
-
-    const notificationPayload = {
-        type:	 'product.created',
-		subject: `Hey there, Your product has been created.`,
-		body:     {
-			action_url: 	`http://localhost:3000/dashboard/supplier/products/product?product_id=${payload._id}`,
-			date: 			payload?.createdAt,
-			message: 		'Waiting to be reviewed!',
-			type: 			'product'
-		}
-    };
-
-    
-    // Uncomment when message broker is ready
-    await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,notificationPayload);
-};
 /****************************FUNCTIONS***********************************/
-
 const CREATE_NEW_PRODUCT = (async(req,res)=>{
 	const payload = req.body;
 	const ACCOUNT_ID = req.query?.account_id;
 	const ACCOUNT_TYPE = req.query?.account_type;
-	console.log(ACCOUNT_ID, ACCOUNT_TYPE)
 	try{
 		if (!ACCOUNT_ID || !ACCOUNT_TYPE){
 			throw new ValidationError('Missing parameter requirements')
 		}
 		let EXISTING_ACCOUNT;
-		const ACCOUNT_QUERY = { user_model_ref : ACCOUNT_ID,  };
+		const ACCOUNT_QUERY = { _id : ACCOUNT_ID,  }; // use the id of the account i.e supplier
 		const PROJECTION = { user_model_ref: 1, products: 1, status: 1 };
 		
 		switch (ACCOUNT_TYPE){
@@ -78,7 +37,7 @@ const CREATE_NEW_PRODUCT = (async(req,res)=>{
 				EXISTING_ACCOUNT = await SUPPLIER_MODEL.findOne(ACCOUNT_QUERY,PROJECTION)
 				break;
 			case 'admin':
-				//EXISTING_ACCOUNT = await SUPPLIER_MODEL.findOne(ACCOUNT_QUERY,PROJECTION)
+				EXISTING_ACCOUNT = await SUPPLIER_MODEL.findOne(ACCOUNT_QUERY,PROJECTION)
 				break;
 			default:
 				throw new ValidationError('Missing parameter requirements')
@@ -88,10 +47,10 @@ const CREATE_NEW_PRODUCT = (async(req,res)=>{
 			throw new ValidationError('You dont have an active lister account, set up one now')
 		};
 		if (EXISTING_ACCOUNT?.status.stage === 'pending'){
-			throw new ValidationError('Your lister account is yet to be approved.')
+			throw new ValidationError('This lister account is yet to be approved.')
 		};
 		if (EXISTING_ACCOUNT?.status.stage === 'suspended'){
-			throw new ValidationError('Your lister account has been rejected.Contact support')
+			throw new ValidationError('This lister account has been suspended.Contact support')
 		};
 
 		const NEW_PRODUCT_ITEM = await PRODUCT_MODEL.create({
@@ -164,12 +123,43 @@ const CREATE_NEW_PRODUCT = (async(req,res)=>{
 		} });
 		LOGGER.log('info',`SUCCESS[CREATE_NEW_PRODUCT]: ${NEW_PRODUCT_ITEM?.name}`);
 
-		// send to admin
+		// send notification on product creation
+		let NOTIFICATION_TO_USER;
+		let TO_ADMIN;
+		let NOTIFICATION_PAYLOAD;
+		let ACTION_URL;
 		const ADMIN_TO_RECEIVE_NOTIFICATION = await USER_BASE_MODEL?.find({account_type:'admin'},{first_name:1,fcm_token:1});
-		for (const item of ADMIN_TO_RECEIVE_NOTIFICATION){
-			await HANDLE_NEW_PRODUCT_ADMIN_NOTIFICATIONS(item,NEW_PRODUCT_ITEM);
+		for (const user of ADMIN_TO_RECEIVE_NOTIFICATION){
+			NOTIFICATION_TO_USER = user;
+			ACTION_URL = `${process.env.BASE_NOTIFICATION_URL}/admin/products/product?product_id=${NEW_PRODUCT_ITEM?._id}`;
+			TO_ADMIN=true;
+			NOTIFICATION_PAYLOAD = {
+				title: 'Product Created',
+                body: `Hey there, ${NEW_PRODUCT_ITEM?.name} has just been created and is waiting to be reviewed!`,
+                action_url: ACTION_URL,
+                type: 'product.created',
+                product_id: NEW_PRODUCT_ITEM?._id,
+				token: NOTIFICATION_TO_USER?.fcm_token,
+				priority: 3,
+                notification_date: new Date(Date.now())
+			}
+			await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,'fcm',NOTIFICATION_PAYLOAD); // fcm
+			await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,'in-app',NOTIFICATION_PAYLOAD); // fcm
 		};
-		await HANDLE_NEW_PRODUCT_LISTER_NOTIFICATIONS(ACCOUNT_ID,NEW_PRODUCT_ITEM);
+		NOTIFICATION_TO_USER = EXISTING_ACCOUNT;
+		ACTION_URL = `${process.env.BASE_NOTIFICATION_URL}/supplier/products/product?product_id=${NEW_PRODUCT_ITEM?._id}`;
+		TO_ADMIN=false;
+		NOTIFICATION_PAYLOAD = {
+			title: 'Product Created',
+			body: `Hey there, ${NEW_PRODUCT_ITEM?.name} has just been created and is waiting to be reviewed!`,
+			action_url: ACTION_URL,
+			type: 'product.created',
+			product_id: NEW_PRODUCT_ITEM?._id,
+			token: NOTIFICATION_TO_USER?.fcm_token,
+			priority: 3,
+			notification_date: new Date(Date.now())
+		}
+		await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,'in-app',NOTIFICATION_PAYLOAD); // fcm
 
 		return res.status(200).send({
 			error: false,
@@ -190,13 +180,15 @@ const CREATE_NEW_PRODUCT = (async(req,res)=>{
 		});
 	}
 });
-
+// list for products for clients
 const FETCH_PRODUCTS =(async(req,res)=>{
 	const QUERY = req.query.query;
 	try{
 		
 		const EXISTING_PRODUCTS = await PRODUCT_MODEL.aggregate([
-		
+			{
+				$match: { "status.stage": "approved" }
+			},
 			{
 				// Populate the lister field
 				$lookup: {
@@ -315,7 +307,6 @@ const FETCH_PRODUCTS =(async(req,res)=>{
 							}
 						}
 					],
-					"status.stage": "approved"
 				}
 			},
 		]);
@@ -329,7 +320,7 @@ const FETCH_PRODUCTS =(async(req,res)=>{
 		return res.status(500).json({error:true,message:'we could not fetch products.'});
 	}
 });
-
+// list products by lister
 const FETCH_PRODUCTS_BY_OWNER =(async(req,res)=>{
 	const ACCOUNT_ID = req.query.account_id;
 	const QUERY = req.query.query;
@@ -475,15 +466,14 @@ const FETCH_PRODUCTS_BY_OWNER =(async(req,res)=>{
 			count:	EXISTING_PRODUCTS_COUNT
 		});
 	}catch(error){
-		LOGGER.log('error',`ERROR[FETCH PRODUCTS OWNER]{USER: ${ACCOUNT_ID} \n\n\n ${error}\n\n\n}`);
-		return res.status(500).json({error:true,message:'we could not fetch products.'});
+		LOGGER.log('error',`ERROR[FETCH_PRODUCTS_BY_OWNER]{USER: ${ACCOUNT_ID} \n\n\n ${error}\n\n\n}`);
+		return res.status(500).json({error:true,message:'we could not fetch products by owner.'});
 
 	}
 });
-
+// product data by lister
 const FETCH_PRODUCT_DATA_BY_OWNER = (async(req,res)=>{
 	const PRODUCT_ID = req.query.product_id;
-	
 	try{
 		const EXISTING_PRODUCT = await PRODUCT_MODEL.findOne({ _id : PRODUCT_ID })
 			.populate({path:'supplier',select: 'company _id'})
@@ -511,7 +501,7 @@ const FETCH_PRODUCT_DATA_BY_OWNER = (async(req,res)=>{
 
 	}
 });
-
+// product data client side
 const FETCH_PRODUCT_DATA_USER = (async(req,res)=>{
 	const PRODUCT_ID = req.query.product_id;
 	
@@ -546,15 +536,13 @@ const FETCH_PRODUCT_DATA_USER = (async(req,res)=>{
 
 const UPDATE_PRODUCT_DATA = (async(req,res)=>{
 	const payload = req.body;
-	const USER_ID = req.user.sub;
 	const PRODUCT_ID = req.query.product_id;
-
 	try{
-		const EXISTING_PRODUCT = await PRODUCT_MODEL.findOne({ _id : PRODUCT_ID })
+		const EXISTING_PRODUCT = await PRODUCT_MODEL.findOne({ _id : PRODUCT_ID }).populate({path:'lister',select: 'user_model_ref'});
 		if (!EXISTING_PRODUCT){
 			return res.status(200).json({
 				error:		true,
-				message:	'A product with this id does not exist'
+				message:	'This product does not exist'
 			});
 		};
 
@@ -583,57 +571,76 @@ const UPDATE_PRODUCT_DATA = (async(req,res)=>{
 		}};
 
 		await PRODUCT_MODEL.updateOne({_id: PRODUCT_ID},UPDATE_PRODUCT_DOCUMENT);
+		// send notification on status update
+		let NOTIFICATION_TO_USER;
+		let TO_ADMIN;
+		let NOTIFICATION_PAYLOAD;
+		let ACTION_URL;
+		if(payload.product_stage === EXISTING_PRODUCT?.status?.stage){
+			// no notification required as product status has not changed
+		}else if(payload.product_stage === 'approved'){
+			NOTIFICATION_TO_USER = await USER_BASE_MODEL.findOne({_id: EXISTING_PRODUCT?.lister?.user_model_ref}).exec(); 
+			ACTION_URL = `${process.env.BASE_NOTIFICATION_URL}/supplier/products/product?product_id=${PRODUCT_ID}`;
+			TO_ADMIN=false;
+			NOTIFICATION_PAYLOAD = {
+				title: 'Product Approved',
+                body: `${EXISTING_PRODUCT?.name} has been approved by the admin`,
+                action_url: ACTION_URL,
+                icon: 'https://prokemia.com/assets/images/logo.png',
+                type: 'product.approved',
+                product_id: PRODUCT_ID,
+				notification_type: 'in-app',
+				token: NOTIFICATION_TO_USER?.fcm_token,
+				priority: 3,
+                notification_date: new Date(Date.now())
+			}
+			await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,NOTIFICATION_PAYLOAD?.notification_type,NOTIFICATION_PAYLOAD); // to lister
+			await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,'fcm',NOTIFICATION_PAYLOAD); // to lister
+		}else if(payload.request_status_stage === 'suspended'){
+			NOTIFICATION_TO_USER = await USER_BASE_MODEL.findOne({_id: EXISTING_PRODUCT?.lister?.user_model_ref}).exec(); 
+			ACTION_URL = `${process.env.BASE_NOTIFICATION_URL}/supplier/products/product?product_id=${PRODUCT_ID}`;
+			TO_ADMIN=false;
+			NOTIFICATION_PAYLOAD = {
+				title: 'Product Rejected',
+                body: `${EXISTING_PRODUCT?.name} has been rejected by the admin`,
+				message: '',
+				module: 'product',
+                action_url: ACTION_URL,
+                icon: 'https://prokemia.com/assets/images/logo.png',
+                type: 'product.rejected',
+                product_id: PRODUCT_ID,
+				token: NOTIFICATION_TO_USER?.fcm_token,
+				notification_type: 'in-app',
+				priority: 3,
+                notification_date: new Date(Date.now())
+			}
+			await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,NOTIFICATION_PAYLOAD?.notification_type,NOTIFICATION_PAYLOAD); // to lister
+			await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,'fcm',NOTIFICATION_PAYLOAD); // to lister
+		};
 		return res.status(200).send({
 			error: false,
 			message: 'Product updated successfully',
-		})	
+		});
 	}catch(error){
-		LOGGER.log('error',`${ip} - System Error: Editing product. USER: ${USER_ID}, Product: ${PRODUCT_ID}. Error: \n\n\n ${error}\n\n\n`);
-		return res.status(500).json({error:true,message:'we could not edit this product.'});
+		LOGGER.log('error',`
+			Function: [UPDATE_PRODUCT_DATA],
+			title: Failed,
+			ID: ${PRODUCT_ID}, 
+			module: product,
+			message:${error},
+		`);
+		return res.status(500).json({error:true,message:'Product could not be updated.'});
 	}
 });
 
-const DELETE_PRODUCT_BY_OWNER = (async(req,res)=>{
-	let ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || req.connection.socket.remoteAddress).split(",")[0];
-	const USER_ID = req.user.sub;
-	const USER_QUERY = { _id: USER_ID };
-
+const DELETE_PRODUCT = (async(req,res)=>{
 	const PRODUCT_ID = req.query.product_id;
 	try{
-		const EXISTING_USER = await USER_BASE_MODEL.findOne(USER_QUERY).populate('account_status_model_ref').exec();
-		if (!EXISTING_USER){
-			return res.status(200).json({
-				error:		true,
-				message:	'An account with this id does not exist'
-			});
-		};
-
-		if (EXISTING_USER?.account_status_model_ref?.suspension?.status){
-			return res.status(200).json({
-				error:		true,
-				message:	'This account has been suspended',
-			});
-		};
-
-		if (EXISTING_USER?.account_status_model_ref?.deletion?.status){
-			return res.status(200).json({
-				error:		true,
-				message:	'This account has already been flagged for deletion',
-				date:		EXISTING_USER?.account_status_model_ref?.deletion?.date
-			});
-		};
-
 		const EXISTING_PRODUCT = await PRODUCT_MODEL.findOne({ _id : PRODUCT_ID })
 		if (!EXISTING_PRODUCT){
 			return res.status(200).json({
 				error:		true,
 				message:	'A product with this id does not exist'
-			});
-		};
-		if (JSON.stringify(EXISTING_PRODUCT?.lister) !== JSON.stringify(EXISTING_USER?.supplier_account_model_ref)){
-			return res.status(200).json({
-				error:		true,
-				message:	'You do not own this product'
 			});
 		};
 		await MARKET_MODEL.updateMany({},{ $pull: { products: { $in: [PRODUCT_ID] }, documents: { $in: EXISTING_PRODUCT?.documents } }});
@@ -647,24 +654,36 @@ const DELETE_PRODUCT_BY_OWNER = (async(req,res)=>{
 				"status.date":new Date(Date.now())
 			}}
 		);
-		await PRODUCT_MODEL.deleteOne({_id: PRODUCT_ID});
+		//await PRODUCT_MODEL.deleteOne({_id: PRODUCT_ID}); delete product after 30 days
+		await PRODUCT_MODEL.updateOne(
+			{_id: PRODUCT_ID},
+			{ $set:{
+				"status.status": false,
+				"status.stage": 'deleted',
+				"status.date": new Date(Date.now() + 30*24*60*60*1000),
+				"status.comment":'Product deleted',
+				}
+			}) // delete product after 30 days
+		// send email notification to notify lister of the deleted product
 		return res.status(200).send({
 			error: false,
 			message: 'Product deleted successfully'
 		})
 	}catch(error){
-		LOGGER.log('error',`${ip} - System Error: Deleting product. USER: ${USER_ID}, Product: ${PRODUCT_ID}. Error: \n\n\n ${error}\n\n\n`);
-		return res.status(500).json({error:true,message:'we could not delete this product.'});
-
+		LOGGER.log('error',`
+			Function: [DELETE_PRODUCT],
+			ID: ${PRODUCT_ID}, 
+			error: ${error}
+		`);
+		return res.status(500).json({error:true,message:'Product could not be deleted'});
 	}
 });
-
+// list products for admin
 const FETCH_ALL_PRODUCTS_FOR_ADMIN=(async(req,res)=>{
 	const QUERY = req.query.query;
 	const STATUS_FILTER = req.query.status_filter || '';
 	const PAGE = req.query.page || 1;
 	const SKIP_VALUE = (parseInt(PAGE) - 1) * 10  // Used to skip to the next records
-
 	try{
 		const EXISTING_PRODUCTS = await PRODUCT_MODEL.aggregate([
 			{
@@ -821,11 +840,10 @@ const FETCH_ALL_PRODUCTS_FOR_ADMIN=(async(req,res)=>{
 			count:	EXISTING_PRODUCTS_COUNT
 		});
 	}catch(error){
-		LOGGER.log('error',`ERROR[FETCH PRODUCTS ADMIN]{USER: ${ACCOUNT_ID} \n\n\n ${error}\n\n\n}`);
-		return res.status(500).json({error:true,message:'we could not fetch products.'});
-
+		LOGGER.log('error',`ERROR[FETCH PRODUCTS ADMIN]{\n\n\n ${error}\n\n\n}`);
+		return res.status(500).json({error:true,message:'we could not fetch products for admin.'});
 	}
-})
+});
 
 module.exports = {
 	/*****************************SUPPLIER_LISTER************************************/
@@ -833,7 +851,7 @@ module.exports = {
 	FETCH_PRODUCTS_BY_OWNER,
 	FETCH_PRODUCT_DATA_BY_OWNER,
 	FETCH_ALL_PRODUCTS_FOR_ADMIN,
-	DELETE_PRODUCT_BY_OWNER,
+	DELETE_PRODUCT,
 	UPDATE_PRODUCT_DATA,
 	/*****************************USER***********************************************/
 	FETCH_PRODUCTS,

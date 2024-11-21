@@ -9,6 +9,10 @@ const PRODUCT_SCHEMA_MODEL = new mongoose.Schema({
 	supplier:		{ type: mongoose.Schema.Types.ObjectId, ref: 'SUPPLIER' },
 	seller:			{ type: mongoose.Schema.Types.ObjectId, ref: 'SUPPLIER' },
 	consultants:	[{type: mongoose.Schema.Types.ObjectId, ref: 'USER' }],
+	approved:		{ 
+		by: mongoose.Schema.Types.ObjectId, // ref: 'ADMIN', 
+		date: Date,
+	},
 	description:	{ type: String },
 	chemical_name:  { type: String },
 	function:		{ type: String },
@@ -22,7 +26,7 @@ const PRODUCT_SCHEMA_MODEL = new mongoose.Schema({
 	technology:		{type: mongoose.Schema.Types.ObjectId, ref: 'MARKET' },
 	status:			{
 						status: Boolean, 
-						stage: String, //pending,approval,suspension,draft 
+						stage: String, //pending,approval,suspension,draft,deleted 
 						comment: String, 
 						date: Date, 
 						approver: mongoose.Schema.Types.ObjectId 
@@ -31,6 +35,7 @@ const PRODUCT_SCHEMA_MODEL = new mongoose.Schema({
 	statistics:		{
 						views:		Number, default: 0,
 						search:		Number,
+						saved:		Number
 					},
 	requests:		[{type: mongoose.Schema.Types.ObjectId, ref: 'REQUEST'}],
 },{ timestamps: true });
@@ -70,6 +75,8 @@ const MARKET_SCHEMA_MODEL = new Schema({
 					},
 	documents:		[{type:mongoose.Schema.Types.ObjectId, ref:'DOCUMENT'}],
 	products:		[{type:mongoose.Schema.Types.ObjectId, ref:'PRODUCT'}],
+	suppliers:		[{type:mongoose.Schema.Types.ObjectId, ref:'SUPPLIER'}],
+	clients:			[{type:mongoose.Schema.Types.ObjectId, ref:'CLIENT'}],
 	suggested:		{ type: mongoose.Schema.Types.ObjectId, ref: 'USER' },
 	statistics:		{
 						views:		Number,

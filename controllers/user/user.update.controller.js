@@ -64,13 +64,20 @@ const HANDLE_ACCOUNT_SAVED_PRODUCTS=async(req,res)=>{
 			throw new ValidationError('Missing parameter requirements')
 		};
 		let ACCOUNT_DATA;
+		// check if product exists
+		let EXISTING_PRODUCT = await PRODUCT_MODEL.findById(payload.products[0]);
+		if(!EXISTING_PRODUCT) {
+			throw new ValidationError('Product not found')
+        };
 		switch(ACCOUNT_TYPE){
 			case 'client':
 				ACCOUNT_DATA = await CLIENT_MODEL.findOne({user_model_ref: ACCOUNT_ID},{products: 1});
 				if (IS_PRODUCT_SAVED(payload?.products[0],ACCOUNT_DATA?.products)){
 					await CLIENT_MODEL.updateOne({user_model_ref: ACCOUNT_ID},{$pull: { products: payload?.products[0]}})
 				}else{
-					await CLIENT_MODEL.updateOne({user_model_ref: ACCOUNT_ID},	{ $push: {"products": {"$each": payload?.products}}});	
+					await CLIENT_MODEL.updateOne({user_model_ref: ACCOUNT_ID},	{ $push: {"products": {"$each": payload?.products}}});
+					EXISTING_PRODUCT.statistics.saved = EXISTING_PRODUCT?.statistics?.saved ? EXISTING_PRODUCT?.statistics?.saved + 1 : 1;
+					EXISTING_PRODUCT.save()
 				}
 				break;
 			default:
@@ -150,7 +157,6 @@ const UPDATE_USER_ACCOUNT_DETAILS = (async (req,res)=>{
 		});
 	}
 });
-
 
 module.exports ={
 	UPDATE_USER_DETAILS,
