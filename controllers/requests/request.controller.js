@@ -10,6 +10,36 @@ const { ValidationError } = require('../../lib/error.lib.js');
 const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
 /****************************CONSTANTS*********************************/
 /****************************HELPER FUNCTIONS**************************/
+const HANDLE_STATUS_REQUEST_NOTIFICATIONS = async (user,toAdmin,payload,action_url,notificationType,email_type,status) => {
+	const userId = user?._id;
+	const FCM_TOKEN = user?.fcm_token;
+	let notificationPayload;
+	switch (notificationType) {
+		case 'fcm':
+			
+		case 'in-app':
+			
+		case 'email':
+			notificationPayload = {
+				type:	 			email_type,
+				subject: 			`Your ${payload?.type} request has been ${status}.`,
+				email:				user?.email,
+				body:{
+					name:			user?.first_name,
+					_id:			payload?._id,
+					product_id:		payload?.product_id,
+					product_name:	payload?.product_name,
+					amount:			payload?.amount,
+					units:			payload?.units,
+					type:			payload?.type,
+					action_url:	    action_url
+				}
+			};
+			await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,notificationPayload);
+		default:
+			return;
+	};
+};
 const HANDLE_NEW_REQUEST_NOTIFICATIONS = async (user,toAdmin,payload,action_url,notificationType,email_type) => {
 	const userId = user?._id;
 	const FCM_TOKEN = user?.fcm_token;
@@ -27,6 +57,7 @@ const HANDLE_NEW_REQUEST_NOTIFICATIONS = async (user,toAdmin,payload,action_url,
 					token: 			FCM_TOKEN
 				}
 			};
+			await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,notificationPayload);
 		case 'in-app':
 			notificationPayload = {
 				type:	 'sample.request.created',
@@ -121,8 +152,10 @@ const CREATE_REQUEST=(async(req, res)=>{
 		// send email to lister
 		EXISTING_SUPPLIER.email = EXISTING_SUPPLIER?.user_model_ref?.email;
 		EXISTING_SUPPLIER.first_name = EXISTING_SUPPLIER?.user_model_ref?.first_name;
+		EXISTING_SUPPLIER.fcm_token = EXISTING_SUPPLIER?.user_model_ref?.fcm_token;
 		action_url = `https://prokemia.com/dashboard/supplier/requests/view?request_id=${NEW_REQUEST_ITEM?._id}`;
 		await HANDLE_NEW_REQUEST_NOTIFICATIONS(EXISTING_SUPPLIER,'false',NEW_REQUEST_ITEM,action_url,'email','supplier.request.created');
+		await HANDLE_NEW_REQUEST_NOTIFICATIONS(EXISTING_SUPPLIER,'false',NEW_REQUEST_ITEM,action_url,'fcm','supplier.request.created');
 
 		/** add requests to respective models
 		 * supplier
@@ -160,6 +193,8 @@ const FETCH_ALL_REQUESTS=(async(req,res)=>{
 	const ACCOUNT_ID = req.query.account_id;
 	const ACCOUNT_TYPE = req.user.account_type;
 	const REQUESTS_TYPE = req.query.request_type || 'sample';
+	const PAGE = req.query.page || 1;
+	const SKIP_VALUE = (parseInt(PAGE) - 1) * 10;
 
 	try{
 		let REQUESTS_ACCOUNT_QUERY;
@@ -185,8 +220,41 @@ const FETCH_ALL_REQUESTS=(async(req,res)=>{
 			.populate({path: 'product_model_ref', select: 'name'})
 			.populate({path:'requestor_model_ref',select:'first_name'})
 			.populate({path:'supplier_model_ref',select:'company'})
+			.skip(SKIP_VALUE)
+			.limit(10)
 			.exec();
 		const EXISTING_REQUESTS_COUNT = await REQUEST_MODEL.countDocuments(REQUESTS_ACCOUNT_QUERY)
+		return res.status(200).json({
+			error: false,
+			message: 'Success',
+			data: EXISTING_REQUESTS,
+			count: EXISTING_REQUESTS_COUNT
+		})
+	}catch(error){
+		LOGGER.log('error',`System Error: fetching requests. USER: ${USER_ID}. Error: \n\n\n ${error}\n\n\n`);
+		return res.status(500).json({error:true,message:'we could not fetch requests.'});
+	}
+});
+
+const FETCH_ALL_ADMIN_REQUESTS=(async(req,res)=>{
+	const USER_ID = req.user.sub;
+	const REQUESTS_TYPE = req.query.request_type || 'sample';
+	const PAGE = req.query.page || 1;
+	const SKIP_VALUE = (parseInt(PAGE) - 1) * 10;
+	try{
+		const REQUESTS_QUERY = {
+			type : REQUESTS_TYPE
+		};
+
+		const EXISTING_REQUESTS = await REQUEST_MODEL.find(REQUESTS_QUERY)
+			.sort({_id: -1})
+			.populate({path: 'product_model_ref', select: 'name'})
+			.populate({path:'requestor_model_ref',select:'first_name'})
+			.populate({path:'supplier_model_ref',select:'company'})
+			.skip(SKIP_VALUE)
+			.limit(10)
+			.exec();
+		const EXISTING_REQUESTS_COUNT = await REQUEST_MODEL.countDocuments()
 		return res.status(200).json({
 			error: false,
 			message: 'Success',
@@ -282,6 +350,20 @@ const UPDATE_REQUEST=(async(req,res)=>{
 		}};
 
 		await REQUEST_MODEL.updateOne({_id: REQUEST_ID},UPDATE_REQUEST_ITEM);
+		// send notification to client
+		EXISTING_REQUEST.product_id = EXISTING_REQUEST?.product_model_ref?._id;
+		EXISTING_REQUEST.product_name = EXISTING_REQUEST?.product_model_ref?.name;
+		let action_url;
+		action_url = `https://prokemia.com/dashboard/client/requests/view?request_id=${EXISTING_REQUEST?._id}`;
+		if(payload.request_status_stage === EXISTING_REQUEST?.status?.stage){
+			;
+		}else if(payload.request_status_stage === 'started'){
+			await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.started',payload?.request_status_stage);
+		}else if(payload.request_status_stage === 'completed'){
+			await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.completed',payload?.request_status_stage);
+		}else if(payload.request_status_stage === 'rejected'){
+			await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.rejected',payload?.request_status_stage);
+		};
 		return res.status(200).send({
 			error: false,
 			message: 'Changes have been saved'
@@ -292,6 +374,62 @@ const UPDATE_REQUEST=(async(req,res)=>{
 		return res.status(500).json({error:true,message:'we could not update this request.'});
 	}
 });
+
+const HANDLE_REQUEST_STATUS=(async(req, res)=>{
+	const USER_ID = req.user.sub;
+	const REQUEST_ID = req.query.request_id;
+	const payload = req.body;
+	try{
+		const EXISTING_REQUEST = await REQUEST_MODEL.findById(REQUEST_ID)
+			.populate({path:'product_model_ref',select:'name'})
+			.populate({path:'requestor_model_ref',select:'first_name last_name client_account_model_ref email mobile address', populate: {path: 'client_account_model_ref', select: 'company'}})
+			.exec();
+	
+		if (!EXISTING_REQUEST){
+			return res.status(200).json({
+				error:		true,
+				message:	'A request with this id does not exist'
+			});
+		};
+		const CLIENT_ID = EXISTING_REQUEST?.requestor_model_ref?._id
+		const EXISTING_USER = await USER_BASE_MODEL.findById(CLIENT_ID).populate('account_status_model_ref').exec();
+		if (!EXISTING_USER){
+			return res.status(200).json({
+				error:		true,
+				message:	'An account with this id does not exist'
+			});
+		};
+		const UPDATE_REQUEST_ITEM = {$set:{
+			status:	{
+				status:				payload?.request_status_status,
+				stage:				payload?.request_status_stage,
+			},
+		}};
+
+		await REQUEST_MODEL.updateOne({_id: REQUEST_ID},UPDATE_REQUEST_ITEM);
+		// send notification to client
+		EXISTING_REQUEST.product_id = EXISTING_REQUEST?.product_model_ref?._id;
+		EXISTING_REQUEST.product_name = EXISTING_REQUEST?.product_model_ref?.name;
+		let action_url;
+		action_url = `https://prokemia.com/dashboard/client/requests/view?request_id=${EXISTING_REQUEST?._id}`;
+		if(payload.request_status_stage === 'started'){
+			await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.started',payload?.request_status_stage);
+		}else if(payload.request_status_stage === 'completed'){
+			await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.completed',payload?.request_status_stage);
+		}else if(payload.request_status_stage === 'rejected'){
+			await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.rejected',payload?.request_status_stage);
+		};
+
+		return res.status(200).send({
+			error: false,
+			message: 'Changes have been saved'
+		})
+
+	}catch(error){
+		LOGGER.log('error',`System Error: Request update failed. USER: ${USER_ID}. Error: \n\n\n ${error}\n\n\n`);
+		return res.status(500).json({error:true,message:'we could not update this request.'});
+	}
+})
 
 const DELETE_REQUEST=(async(req,res)=>{
 	const USER_ID = req.user.sub;
@@ -351,5 +489,7 @@ module.exports = {
 	FETCH_ALL_REQUESTS,
 	FETCH_REQUEST_DATA,
 	UPDATE_REQUEST,
-	DELETE_REQUEST
+	DELETE_REQUEST,
+	HANDLE_REQUEST_STATUS,
+	FETCH_ALL_ADMIN_REQUESTS
 }
