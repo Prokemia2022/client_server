@@ -14,7 +14,11 @@ const {
 	FETCH_SUPPLIER_ACCOUNT_FOR_ADMIN,
 //	HANDLE_ACCOUNT_DELETION,
 	FETCH_ALL_CLIENTS_FOR_ADMIN,
-	FETCH_CLIENT_ACCOUNT_FOR_ADMIN
+	FETCH_CLIENT_ACCOUNT_FOR_ADMIN,
+	FETCH_ALL_ADMINS,
+	FETCH_ACCOUNT_FOR_ADMIN,
+	FETCH_ALL_SALEPEOPLE_FOR_ADMIN,
+	FETCH_SALESPERSON_ACCOUNT_FOR_ADMIN
 } = require("../controllers/user/user.details.controller");
 const { 
 	UPDATE_USER_DETAILS, 
@@ -93,5 +97,12 @@ router.get('/suppliers/all', FETCH_ALL_SUPPLIERS_FOR_ADMIN );
 router.get('/supplier/admin', FETCH_SUPPLIER_ACCOUNT_FOR_ADMIN);
 router.get('/clients/all', FETCH_ALL_CLIENTS_FOR_ADMIN);
 router.get('/client/admin', FETCH_CLIENT_ACCOUNT_FOR_ADMIN);
+
+/****************************SALESPERSON***********************************/
+router.get('/admins/all', FETCH_ALL_ADMINS);
+router.get('/admin/details', FETCH_ACCOUNT_FOR_ADMIN);
+/****************************SALESPERSON***********************************/
+router.get('/salespeople/admin', FETCH_ALL_SALEPEOPLE_FOR_ADMIN);
+router.get('/salesperson/details/admin/', FETCH_SALESPERSON_ACCOUNT_FOR_ADMIN);
 
 module.exports = router;

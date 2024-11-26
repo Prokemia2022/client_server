@@ -10,7 +10,7 @@ const {
 	REQUEST_MODEL, 
 	MARKET_MODEL 
 } = require("../../models/PRODUCT.model.js");
-const { SUPPLIER_MODEL, CLIENT_MODEL } = require("../../models/ACCOUNT.model.js");
+const { SUPPLIER_MODEL, CLIENT_MODEL, SALESPERSON_MODEL } = require("../../models/ACCOUNT.model.js");
 /****************************CONFIGS*************************************/
 /****************************LIB*****************************************/
 const { LOGGER } = require('../../lib/logger.lib.js');
@@ -118,10 +118,16 @@ const HANDLE_ACCOUNT_DELETION=(async(req,res)=>{
 				
 				await DELETE_SUPPLIER_MODELS(ACCOUNT_ID,EXISTING_SUPPLIER_ACCOUNT?.products,EXISTING_SUPPLIER_ACCOUNT?.documents);
 				break;
+			case 'salesperson':				
+				await DELETE_SALESPERSON_MODELS(ACCOUNT_ID);
+				break;
+			case 'admin':
+				await DELETE_ADMIN_MODELS(ACCOUNT_ID)
+				break;
 			default:
 				throw new ValidationError('Missing parameter requirements')
 		};
-		await HANDLE_DELETION_NOTIFICATIONS(EXISTING_ACCOUNT);
+		// await HANDLE_DELETION_NOTIFICATIONS(EXISTING_ACCOUNT);
 		LOGGER.log('info',`SUCCESS[HANDLE_ACCOUNT_DELETION]`)
 		
 		return res.status(200).json({
@@ -145,6 +151,15 @@ const HANDLE_ACCOUNT_DELETION=(async(req,res)=>{
 
 
 
+const DELETE_ADMIN_MODELS=async(ACCOUNT_ID)=>{
+	try{
+		await ADMIN_MODEL.deleteOne({user_model_ref: ACCOUNT_ID})
+		await ACCOUNT_STATUS_MODEL.deleteOne({user_model_ref: ACCOUNT_ID})	
+		await USER_BASE_MODEL.deleteOne({_id: ACCOUNT_ID})
+	}catch(error){
+		throw new ValidationError('We could not delete account data');
+	}
+};
 const DELETE_CLIENT_MODELS=async(ACCOUNT_ID)=>{
 	try{
 		await REQUEST_MODEL.updateMany({requestor_model_ref: ACCOUNT_ID},{
@@ -154,6 +169,16 @@ const DELETE_CLIENT_MODELS=async(ACCOUNT_ID)=>{
 			}
 		})
 		await CLIENT_MODEL.deleteOne({user_model_ref: ACCOUNT_ID})
+		await ACCOUNT_STATUS_MODEL.deleteOne({user_model_ref: ACCOUNT_ID})	
+		await USER_BASE_MODEL.deleteOne({_id: ACCOUNT_ID})
+	}catch(error){
+		throw new ValidationError('We could not delete your account data');
+	}
+};
+const DELETE_SALESPERSON_MODELS=async(ACCOUNT_ID)=>{
+	console.log(ACCOUNT_ID)
+	try{
+		await SALESPERSON_MODEL.deleteOne({user_model_ref: ACCOUNT_ID})
 		await ACCOUNT_STATUS_MODEL.deleteOne({user_model_ref: ACCOUNT_ID})	
 		await USER_BASE_MODEL.deleteOne({_id: ACCOUNT_ID})
 	}catch(error){

@@ -33,20 +33,21 @@ const SUPPLIER_MODEL_SCHEMA = new Schema({
 const SALESPERSON_MODEL_SCHEMA = new Schema({
 	user_model_ref:		{ type: mongoose.Schema.Types.ObjectId, ref: 'USER' },
 	description:		{ type: String },
-	company:			[{
+	company:			{
 		name: String,
 		mobile: String,
 		email: String,
 		address: String,
 		position: String,
-		existing_supplier_id:	mongoose.Schema.Types.ObjectId
-	}],
+	},
+	orders:				{ type: mongoose.Schema.Types.ObjectId, ref: 'ORDER' },
+	status:				{ status: Boolean, stage: String, comment: String },
 	consultation:		{ 
-		status: Boolean, 
-		consultation_model_refs: [{ 
+		status: Boolean, // active consultation is active or not
+		consultation_model_ref: { 
 			type: mongoose.Schema.Types.ObjectId, 
 			ref:'CONSULTANT'
-		}],
+		},
 	}
 },{timestamps: true});
 
@@ -54,6 +55,8 @@ const CONSULTANTS_MODEL_SCHEMA = new Schema({
 	user_model_ref:		{ type:	mongoose.Schema.Types.ObjectId, ref: 'USER' },
 	description:		{ type: String },
 	markets:			[{type: mongoose.Schema.Types.ObjectId, ref: 'MARKET'}],
+	products:			[{type: mongoose.Schema.Types.ObjectId, ref: 'PRODUCT'}],
+	status:				{ status: Boolean, stage: String, comment: String }
 }, { timestamps: true });
 
 const CLIENT_MODEL = mongoose.model("CLIENT", CLIENT_MODEL_SCHEMA);

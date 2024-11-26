@@ -389,7 +389,17 @@ const FETCH_SUPPLIER_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 		let RETURN_DATA;
 		// check whether supplier account exists and is approved
 		const projection = { company: 1, image_url: 1, type: 1, description: 1, user_model_ref: 1, statistics: 1, industry: 1, technology: 1, status: 1};
-		const EXISTING_SUPPLIER = await SUPPLIER_MODEL.findOne({_id: SUPPLIER_ID},projection).populate({path:'user_model_ref',select:'first_name last_name email mobile'}).populate({path:'industry',select: 'title'}).populate({path:'technology',select: 'title'}).exec();
+		const EXISTING_SUPPLIER = await SUPPLIER_MODEL.findOne({_id: SUPPLIER_ID},projection)
+			.populate({
+				path: 'user_model_ref',
+				select: 'first_name last_name email mobile account_status_model_ref',
+				populate: {
+					path: 'account_status_model_ref', // Populate the nested account_status_model_ref
+				}
+			})
+			.populate({path:'industry',select: 'title'})
+			.populate({path:'technology',select: 'title'})
+			.exec();
 
 		if (!EXISTING_SUPPLIER || EXISTING_SUPPLIER?.status?.stage === 'suspended'){
 			return res.status(200).json({
@@ -729,12 +739,7 @@ const FETCH_ALL_CLIENTS_FOR_ADMIN=(async(req,res)=>{
 								$regex: `^${QUERY}`, // Query
 								$options: "i"   // 'i' for case-insensitive search
 							},
-						},{
-							"company.name": {
-								$regex: `^${QUERY}`, // Query
-								$options: "i"   // 'i' for case-insensitive search
-							},
-						},
+						}
 					],
 				}
 			},
@@ -757,6 +762,142 @@ const FETCH_ALL_CLIENTS_FOR_ADMIN=(async(req,res)=>{
 	}
 })
 
+const FETCH_ALL_ADMINS=(async(req,res)=>{
+	const QUERY = req.query.query.toLowerCase();
+	const PAGE = req.query.page || 1;
+	const SKIP_VALUE = (parseInt(PAGE) - 1) * 10  // Used to skip to the next records
+	
+	try{
+		const EXISTING_ADMINS = await USER_BASE_MODEL.aggregate([
+			{
+				$match: { 
+					account_type: 'admin'
+				}
+			},
+			{
+				// Populate the admin field
+				$lookup: {
+					from: 'admins', // The admin collection
+					localField: 'admin_account_model_ref',
+					foreignField: '_id',
+					as: 'admin_account_model_ref', // Will contain populated admin data
+				},
+			},
+			{
+				// Unwind the populated admin array to a single document
+				$unwind: '$admin_account_model_ref',
+			},
+			{
+				// Populate the admin account status field
+				$lookup: {
+					from: 'account_statuses', // The admin collection
+					localField: 'account_status_model_ref',
+					foreignField: '_id',
+					as: 'account_status_model_ref', // Will contain populated admin data
+				},
+			},
+			{
+				// Unwind the populated admin array to a single document
+				$unwind: '$account_status_model_ref',
+			},
+			{
+				$project: {
+					"admin_account_model_ref":		1,
+					"profile_image_url":			1,
+					"first_name":					1,
+					"email":						1,
+					"mobile":						1,
+					"requests":						1,
+					"_id":							1,	
+					"createdAt":					1,
+					"account_status_model_ref":		1
+				}
+			},
+			{
+				$match: {
+					$or:[
+						{
+							"first_name": {
+								$regex: `^${QUERY}`, // Query
+								$options: "i"   // 'i' for case-insensitive search
+							},
+						},{
+							"email": {
+								$regex: `^${QUERY}`, // Query
+								$options: "i"   // 'i' for case-insensitive search
+							},
+						},{
+							"mobile": {
+								$regex: `^${QUERY}`, // Query
+								$options: "i"   // 'i' for case-insensitive search
+							},
+						},{
+							"admin_account_model_ref.role": {
+								$regex: `^${QUERY}`, // Query
+								$options: "i"   // 'i' for case-insensitive search
+							},
+						},
+					],
+				}
+			},
+			{ $sort: { createdAt: -1}},
+			{ $skip: SKIP_VALUE},
+			{ $limit: 10 }
+		]);
+
+		const EXISTING_ADMINS_COUNT = await USER_BASE_MODEL?.countDocuments({account_type: 'admin'});
+		return res.status(200).send({
+			error: false,
+			message: 'success',
+			data:	EXISTING_ADMINS,
+			count:	EXISTING_ADMINS_COUNT
+		});
+	}catch(error){
+		LOGGER.log('error',`ERROR[FETCH ALL ADMINS]: ${error}`);
+		return res.status(500).json({error:true,message:'we could not fetch admins.'});
+
+	}
+})
+
+const FETCH_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
+	try{
+		const ADMIN_ID = req.query.admin_id;
+		// check whether account exists and is approved
+		const projection = { 
+			first_name:					1, 
+			profile_image_url:			1, 
+			last_name:					1,
+			email:						1,
+			mobile:						1,
+			account_type:				1, 
+			admin_account_model_ref:	1, 
+			account_status_model_ref:	1,
+			createdAt:					1
+		};
+		const EXISTING_USER = await USER_BASE_MODEL.findOne({_id: ADMIN_ID},projection).populate('admin_account_model_ref').populate('account_status_model_ref').exec();
+		if (!EXISTING_USER){
+			return res.status(200).json({
+				error:		true,
+				message:	'This user does not exist.'
+			});
+		};
+		// Compile data
+		RETURN_DATA={
+			user_data:		EXISTING_USER,
+		};
+		return res.status(200).send({
+			error:		false,
+			message:	'success',
+			data:		RETURN_DATA,
+		});
+	}catch(error){
+		LOGGER.log('error',`ERROR[FETCH_ACCOUNT_FOR_ADMIN]: \n\n\n ${error}\n\n\n`);
+		return res.status(500).json({
+			error:true,
+			message:'we could not fetch this admin account.'
+		});
+	}
+})
 const FETCH_CLIENT_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 	// Piece the information for a particular client
 	// Products, Documents, Bio
@@ -1050,7 +1191,78 @@ const HANDLE_ACCOUNT_DELETION=(async(req,res)=>{
 		});
 	};
 }); 
+/****************************SALESPERSON***********************************/
+const FETCH_ALL_SALEPEOPLE_FOR_ADMIN=(async(req,res)=>{
+	const QUERY = req.query.query.toLowerCase() || '';
+	const PAGE = req.query.page || 1;
+	const SKIP_VALUE = (parseInt(PAGE) - 1) * 10  // Used to skip to the next records
+	
+	try{
+		const EXISTING_USERS = await USER_BASE_MODEL
+		.find({
+			account_type: 'salesperson',
+			$or:[
+				{ "first_name": { "$regex": `^${QUERY}`, "$options": "i"}},
+				{ "email": { "$regex": `^${QUERY}`, "$options": "i"}},
+				{ "mobile": { "$regex": `^${QUERY}`, "$options": "i"}},
+			]
+		})
+		.populate('salesperson_account_model_ref')
+		.populate('account_status_model_ref')
+		.sort({createdAt: -1})
+		.skip(SKIP_VALUE)
+		.limit(10) // Limit the result to 10 records per page
+		.exec();
+		console.log(EXISTING_USERS)
 
+		const EXISTING_USERS_COUNT = await USER_BASE_MODEL?.countDocuments({account_type: 'salesperson'});
+		return res.status(200).send({
+			error: false,
+			message: 'success',
+			data:	EXISTING_USERS,
+			count:	EXISTING_USERS_COUNT
+		});
+	}catch(error){
+		LOGGER.log('error',`ERROR[FETCH_ALL_SALEPEOPLE_FOR_ADMIN]: ${error}`);
+		return res.status(500).json({error:true,message:'we could not fetch salespeople.'});
+
+	}
+})
+const FETCH_SALESPERSON_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
+	try{
+		const USER_ID = req.query.salesperson_id;
+
+		const PRODS_PAGE = req.query.prods_page || 1;
+		const PRODS_SKIP_VALUE = (parseInt(PRODS_PAGE) - 1) * 10  // Used to skip to the next records
+		
+		let RETURN_DATA;
+		const EXISTING_CLIENT = await USER_BASE_MODEL.findOne({_id: USER_ID}).populate('salesperson_account_model_ref').populate('account_status_model_ref').exec();
+		if (!EXISTING_CLIENT){
+			return res.status(200).json({
+				error:		true,
+				message:	'This client does not exist.'
+			});
+		};
+		// Compile data
+		RETURN_DATA={
+			user_data:		EXISTING_CLIENT,
+			/*********************products*******************************/
+			products:		[],
+			products_count: 0,
+		};
+		return res.status(200).send({
+			error:		false,
+			message:	'success',
+			data:		RETURN_DATA,
+		});
+	}catch(error){
+		LOGGER.log('error',`ERROR[FETCH_SALESPERSON_ACCOUNT_FOR_ADMIN]: \n\n\n ${error}\n\n\n`);
+		return res.status(500).json({
+			error:true,
+			message:'we could not fetch this salesperson account.'
+		});
+	}
+})
 module.exports = {
 	FETCH_USER_DATA,
 	LIST_SUPPLIERS_ACCOUNTS_DATA,
@@ -1060,5 +1272,10 @@ module.exports = {
 	FETCH_SUPPLIER_ACCOUNT_FOR_ADMIN,
 	HANDLE_ACCOUNT_DELETION,
 	FETCH_ALL_CLIENTS_FOR_ADMIN,
-	FETCH_CLIENT_ACCOUNT_FOR_ADMIN
+	FETCH_CLIENT_ACCOUNT_FOR_ADMIN,
+	FETCH_ALL_ADMINS,
+	FETCH_ACCOUNT_FOR_ADMIN,
+	/****************************SALESPERSON***********************************/
+	FETCH_ALL_SALEPEOPLE_FOR_ADMIN,
+	FETCH_SALESPERSON_ACCOUNT_FOR_ADMIN
 }

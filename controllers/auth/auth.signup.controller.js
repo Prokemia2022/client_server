@@ -13,10 +13,11 @@ const { USER_BASE_MODEL, ACCOUNT_STATUS_MODEL } = require('../../models/USER.mod
 const { 
 	CLIENT_MODEL, 
 	SUPPLIER_MODEL, 
-	ADMIN_MODEL 
+	ADMIN_MODEL, 
+    SALESPERSON_MODEL
 } = require('../../models/ACCOUNT.model.js');
 /****************************CONSTANTS*********************************/
-const ALLOWED_ACCOUNT_TYPES = ['client', 'supplier', 'admin'];
+const ALLOWED_ACCOUNT_TYPES = ['client', 'supplier', 'admin','salesperson'];
 /****************************HELPER FUNCTIONS**************************/
 const VALIDATE_ACCOUNT_TYPES = (accountType) => {
     if (!ALLOWED_ACCOUNT_TYPES.includes(accountType)) {
@@ -118,7 +119,8 @@ const CREATE_SPECIFIC_ACCOUNT = async (user, payload) => {
     const accountCreators = {
         admin: () => CREATE_ADMIN_MODEL(user, payload?.role),
         client: () => CREATE_CLIENT_MODEL(user, formatClientData(payload?.client)),
-        supplier: () => CREATE_SUPPLIER_MODEL(user, formatSupplierData(payload?.supplier), payload?.supplier?.supplier_type)
+        supplier: () => CREATE_SUPPLIER_MODEL(user, formatSupplierData(payload?.supplier), payload?.supplier?.supplier_type),
+        salesperson: () => CREATE_SALESPERSON_MODEL(user, formatSalespersonData(payload?.salesperson))
     };
 
     const creator = accountCreators[payload?.account_type];
@@ -153,7 +155,8 @@ const CREATE_ACCOUNT_STATUS = async (user) => {
                 notification: true
             },
             onboarding: { status: false },
-            complete_profile: { status: false }
+            complete_profile: { status: false },
+            last_active: new Date(Date.now())
         });
 
         await USER_BASE_MODEL.updateOne(
@@ -166,7 +169,6 @@ const CREATE_ACCOUNT_STATUS = async (user) => {
         throw error;
     }
 };
-
 async function CREATE_ADMIN_MODEL(user,role){
 	try{
 		const adminAccount = await ADMIN_MODEL.create({
@@ -210,6 +212,21 @@ const formatSupplierData = (supplierData) => {
         position: supplierData.supplier_company_handler_position,
         status: supplierData.supplier_approval_status,
         status_stage: supplierData.supplier_status_stage
+    };
+};
+
+const formatSalespersonData = (salespersonData) => {
+    if (!salespersonData?.sales_company_name) return null;
+    
+    return {
+        name: salespersonData?.sales_company_name,
+        email: salespersonData?.sales_company_email,
+        mobile: salespersonData?.sales_company_mobile,
+        address: salespersonData?.sales_company_address,
+        position: salespersonData?.sales_company_position,
+        status_stage: salespersonData?.sales_status_stage,
+        description: salespersonData?.sales_description,
+        consultation_status: salespersonData?.sales_consultation_status,
     };
 };
 
@@ -280,6 +297,39 @@ async function CREATE_SUPPLIER_MODEL(USER,SUPPLIER,TYPE){
 	}
 }
 
+async function CREATE_SALESPERSON_MODEL(USER,SALESPERSON){
+	try{
+		let NEW_ITEM; 
+		if (SALESPERSON === null){
+			NEW_ITEM = await SALESPERSON_MODEL.create({
+				user_model_ref:		USER?._id,
+				status:				{ status: true, stage: 'pending', comment: ''}
+			});
+		}else{
+			NEW_ITEM = await SALESPERSON_MODEL.create({
+				user_model_ref:				USER?._id,
+				description:				SALESPERSON?.description || '',
+				company:					{
+					name:					SALESPERSON?.name || '',
+					email:					SALESPERSON?.email || '',
+					mobile:					SALESPERSON?.mobile || '',
+					address:				SALESPERSON?.address || '',
+					position:				SALESPERSON?.position || '',
+				},
+				status:						{ status: true, stage: 'pending', comment: ''},
+                consultation:               { status: SALESPERSON?.consultation_status || false}
+			});
+		}
+		await USER_BASE_MODEL.updateOne(
+            { _id: USER?._id },
+            { salesperson_account_model_ref: NEW_ITEM?._id }
+        );
+	}catch(error){
+		LOGGER.log('error','[SUPPLIER ACCOUNT CREATION]',error);
+		throw error;
+	}
+}
+
 module.exports = {
 	NEW_USER_ACCOUNT
-}
+};
