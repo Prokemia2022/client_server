@@ -8,7 +8,7 @@ const NOTIFICATION_SCHEMA_MODEL = new mongoose.Schema({
 	payload:			{ type: Object, required: true }, // Actual notification data
 	status:				{ sent: Boolean, read: Boolean, status: String }, //
 	retryCount:			{ type: Number, default: 0 },
-	priority:			{ type: Number, default: 0}, // priority: 0: , 1: , 2: , 3: , 4: , 5: 
+	priority:			{ type: Number, default: 2}, // priority: 0: , 1: , 2: , 3: , 4: , 5: 
 	createdAt:			{ type: Date, default: Date.now },
 	lastAttemptAt:		{ type: Date, default: null }, 
 },{ timestamps: true });

@@ -47,6 +47,15 @@ const FETCH_USER_DATA=(async(req,res)=>{
 					.populate('admin_account_model_ref')
 					.exec();
 				break;
+			case 'salesperson':
+				EXISTING_ACCOUNT = await USER_BASE_MODEL.findById(USER_ID)
+					.populate('account_status_model_ref')
+					.populate({
+						path: 'salesperson_account_model_ref',
+						populate: [{ path: 'user_model_ref',select: 'first_name',}]
+					})
+					.exec();
+				break;
 			default:
 				break;
 		};

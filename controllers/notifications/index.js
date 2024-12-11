@@ -14,7 +14,13 @@ const {
 	PASSWORD_CHANGED_EMAIL_TEMPLATE,
 } = require('../../lib/email_templates/auth.email_template.js');
 const messaging = require("../../lib/firebaseConfig.js");
-const { REQUEST_CREATED_EMAIL_TEMPLATE, NOTIFY_SUPPLIER_REQUEST_CREATED_EMAIL_TEMPLATE } = require("../../lib/email_templates/request.email_template.js");
+const { 
+	REQUEST_CREATED_EMAIL_TEMPLATE, 
+	NOTIFY_SUPPLIER_REQUEST_CREATED_EMAIL_TEMPLATE, 
+	NOTIFY_CLIENT_REQUEST_STARTED_EMAIL_TEMPLATE, 
+	NOTIFY_CLIENT_REQUEST_COMPLETED_EMAIL_TEMPLATE, 
+	NOTIFY_CLIENT_REQUEST_REJECTED_EMAIL_TEMPLATE 
+} = require("../../lib/email_templates/request.email_template.js");
 
 const QUEUE_NOTIFICATION=async(userId, toAdmin, notificationType, payload)=>{
 	try{
@@ -23,14 +29,25 @@ const QUEUE_NOTIFICATION=async(userId, toAdmin, notificationType, payload)=>{
 			toAdmin: toAdmin,
 			notificationType: notificationType,
 			payload: payload,
+			priority: payload?.priority,
 			status: { sent: false, read: false, status: 'pending'},
 			retryCount: 0,
 			createdAt: new Date()
 		}); 
-		
-		LOGGER.log('info',`SUCCESS[QUEUE_NOTIFICATION]`);
+		LOGGER.log('info',`
+			Function: [QUEUE_NOTIFICATION],
+			title: Saved,
+			module: ${payload?.title},
+		`);
 		return
 	}catch(error){
+		LOGGER.log('info',`
+			Function: [QUEUE_NOTIFICATION],
+			title: 	Failed,
+			ID: -,
+			module: ${payload?.title},
+			message:${error},
+		`);
 		throw new Error("Could not queue this notification.")
 	}
 };
@@ -123,6 +140,15 @@ async function HANDLE_EMAIL_NOTIFICATIONS(payload){
 		case 'request.created':
 			_TEMPLATE = REQUEST_CREATED_EMAIL_TEMPLATE(payload?.payload?.body);
 			break;
+		case 'request.started':
+			_TEMPLATE = NOTIFY_CLIENT_REQUEST_STARTED_EMAIL_TEMPLATE(payload?.payload?.body);
+			break;
+		case 'request.rejected':
+			_TEMPLATE = NOTIFY_CLIENT_REQUEST_REJECTED_EMAIL_TEMPLATE(payload?.payload?.body);
+			break;
+		case 'request.completed':
+			_TEMPLATE = NOTIFY_CLIENT_REQUEST_COMPLETED_EMAIL_TEMPLATE(payload?.payload?.body);
+			break;
 		case 'supplier.request.created':
 			_TEMPLATE = NOTIFY_SUPPLIER_REQUEST_CREATED_EMAIL_TEMPLATE(payload?.payload?.body);
 			break;
@@ -153,15 +179,15 @@ async function HANDLE_EMAIL_NOTIFICATIONS(payload){
 async function SEND_FCM_NOTIFICATION(notification){
 	const message = {
 		notification: {
-		  title: notification?.payload?.subject,
-		  body:  notification?.payload?.body?.message,
+		  title: notification?.payload?.title,
+		  body:  notification?.payload?.body,
 		},
 		webpush: {
 			fcm_options: {
-			  link: notification?.payload?.body?.action_url, // URL you want to open on click
+			  link: notification?.payload?.action_url, // URL you want to open on click
 			}
 		},
-		token: notification?.payload?.body?.token,
+		token: notification?.payload?.token,
 	};
 	messaging.send(message)
 	.then((response) => {

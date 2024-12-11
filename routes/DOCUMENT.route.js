@@ -7,7 +7,8 @@ const {
 	FETCH_DOCUMENTS_PRODUCT,
 	CREATE_NEW_DOCUMENT,
 	UPDATE_DOCUMENT,
-	DELETE_DOCUMENT
+	DELETE_DOCUMENT,
+	FETCH_DOCUMENTS_ADMIN
 } = require("../controllers/documents/documents.controller");
 const { AUTHENTICATE_TOKEN } = require("../middleware/token.verifier.middleware");
 
@@ -16,6 +17,7 @@ router.put('/update', AUTHENTICATE_TOKEN, UPDATE_DOCUMENT);
 router.delete('/delete', AUTHENTICATE_TOKEN, DELETE_DOCUMENT);
 //router.get('/all', FETCH_ALL_DOCUMENTS);
 router.get('/lister/all' ,FETCH_DOCUMENTS_LISTER);
+router.get('/admin/all' ,FETCH_DOCUMENTS_ADMIN);
 router.get('/product/all', FETCH_DOCUMENTS_PRODUCT);
 //router.get('/data', FETCH_MARKET_DATA);
 

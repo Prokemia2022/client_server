@@ -85,19 +85,28 @@ const MARKET_SCHEMA_MODEL = new Schema({
 },{ timestamps: true }); 
 
 const ORDER_SCHEMA_MODEL = new Schema({
-	user_model_ref:		{ type: mongoose.Schema.Types.ObjectId, ref: 'USER' }, // creator of order
-	client:				{ name: String, company: String, mobile: String, email: String, address: String },
-	product:			{ name: String, amount: Number, price: Number, unit: String, id: mongoose.Schema.Types.ObjectId },
-	delivery:			{ terms: String, date: Date },
-	payment:			{ type: String },
-	notification:		{ status: Boolean, email: Boolean, sms: Boolean, push: Boolean },
-	status:			{
-						status: Boolean, 
-						stage: String, //pending,approval,suspension,draft 
-						comment: String, 
-						date: Date, 
-						approver: mongoose.Schema.Types.ObjectId 
-					},
+	user_model_ref:			{ type: mongoose.Schema.Types.ObjectId, ref: 'USER' }, // creator of order
+	salesperson_model_ref:	{ type: mongoose.Schema.Types.ObjectId, ref: 'SALESPERSON' }, // salesperson account
+	market:					{ industry: String, technology: String },
+	client:					{ name: String },
+	company:				{ name: String, mobile: String, email: String, address: String },
+	product:				[{ name: String, quantity: Number, price: Number, unit: String, id: mongoose.Schema.Types.ObjectId }],
+	delivery:				{ terms: String, date: Date },
+	payment:				{ terms: String, date: Date },
+	notification:			{ status: Boolean, email: Boolean, sms: Boolean, push: Boolean },
+	status:					{
+								status: Boolean, 
+								stage: String, //pending,approval,suspension,draft 
+								comment: String, 
+								date: Date, 
+								approver: mongoose.Schema.Types.ObjectId 
+							},
+	billing:				{
+								status: Boolean, 
+								stage: String, //pending,approval,suspension,draft 
+								comment: String, 
+								date: Date,
+							},
 },{ timestamps: true });
 
 const REQUEST_MODEL_SCHEMA = new Schema({

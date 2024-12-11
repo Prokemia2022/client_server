@@ -6,44 +6,19 @@ const {error} = require("winston");
 const mongoose = require('mongoose');
 
 const CREATE_NEW_MARKET = (async(req, res)=>{
-	let ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || req.connection.socket.remoteAddress).split(",")[0];
 	const payload = req.body;
 	const USER_ID = req.user.sub;
-	const USER_QUERY = { _id: USER_ID };
 
 	try{
-		const EXISTING_USER = await USER_BASE_MODEL.findOne(USER_QUERY).populate('account_status_model_ref').exec();
-		if (!EXISTING_USER){
-			return res.status(200).json({
-				error:		true,
-				message:	'An account with this id does not exist'
-			});
-		};
-
-		if (EXISTING_USER?.account_status_model_ref?.suspension?.status){
-			return res.status(200).json({
-				error:		true,
-				message:	'This account has been suspended',
-			});
-		};
-
-		if (EXISTING_USER?.account_status_model_ref?.deletion?.status){
-			return res.status(200).json({
-				error:		true,
-				message:	'This account has already been flagged for deletion',
-				date:		EXISTING_USER?.account_status_model_ref?.deletion?.date
-			});
-		};
-
-		const NEW_MARKET_ITEM = await MARKET_MODEL.create({
+		await MARKET_MODEL.create({
 			title:			payload?.title,
 			description:	payload?.description,
 			image_url:		payload?.image_url,
 			type:			payload?.type,
 			status:			{
-								status:	false,
-								stage:	payload?.status?.stage,
-								comment:payload?.status?.comment,
+								status:	payload?.status_stage === 'approved'? true : false,
+								stage:	payload?.status_stage,
+								comment:'',
 								date:	new Date(Date.now()),
 			},
 			suggested:		payload?.suggested,
@@ -54,8 +29,42 @@ const CREATE_NEW_MARKET = (async(req, res)=>{
 			message: 'Market created successfully'
 		});
 	}catch(error){
-		LOGGER.log('error',`${ip} - System Error: Creating a new market. USER: ${USER_ID}. Error: \n\n\n ${error}\n\n\n`);
+		LOGGER.log('error',`System Error: Creating a new market. USER: ${USER_ID}. Error: \n\n\n ${error}\n\n\n`);
 		return res.status(500).json({error:true,message:'we could not create this market.'});
+	}
+});
+
+const UPDATE_MARKET = (async(req, res)=>{
+	const payload = req.body;
+	const MARKET_ID = req.query.market_id;
+	try{
+		const EXISTING_MARKET = await MARKET_MODEL.findOne({ _id : MARKET_ID })
+		if (!EXISTING_MARKET){
+			return res.status(200).json({
+				error:		true,
+				message:	'A market with this id does not exist'
+			});
+		};
+		const UPDATE_DOCUMENT = {$set:{
+			title:			payload?.title,
+			description:	payload?.description,
+			image_url:		payload?.image_url,
+			type:			payload?.type,
+			status:			{
+								status:	payload?.status_stage === 'approved'? true : false,
+								stage:	payload?.status_stage,
+								comment:'',
+			},
+			suggested:		payload?.suggested,
+		}};
+		await MARKET_MODEL.updateOne({_id: MARKET_ID},UPDATE_DOCUMENT);
+		return res.status(200).send({
+			error: false,
+			message: 'Market updated successfully'
+		});
+	}catch(error){
+		LOGGER.log('error',`ERROR[UPDATE_MARKET]: \n\n\n ${error}\n\n\n`);
+		return res.status(500).json({error:true,message:'we could not update this market.'});
 	}
 });
 
@@ -76,6 +85,70 @@ const FETCH_MARKET_LIST=(async(req,res)=>{
 		})
 	}catch(error){
 		LOGGER.log('error',`ERROR[FETCH MARKETS]: \n\n\n ${error}\n\n\n`);
+		return res.status(500).json({error:true,message:'we could not fetch markets.'});
+
+	}
+});
+const FETCH_MARKET_LIST_ADMIN=(async(req,res)=>{
+	const type = req.query.type;
+	const QUERY = req.query.query;
+	const PAGE = req.query.page || 1;
+	const STATUS_FILTER = req.query.status_filter || '';
+	const SKIP_VALUE = (parseInt(PAGE) - 1) * 10  // Used to skip to the next records
+
+	try{
+		const EXISTING_MARKETS = await MARKET_MODEL.aggregate([
+			{
+				$match: { type: type }
+			},
+			{
+				$project: {
+					"title":					1,
+					"image_url":				1,
+					"documents":			1,
+					"products":				1,
+					"suppliers":		1,
+					"clients":		1,
+					"statistics":				1,
+					"type":				1,
+					"status":				1,
+				}
+			},
+			{
+				// Match products whose brand, name, industry, technology, seller, supplier, chemical_name, description, application, starts with the query, e.g., 'rhe'
+				$match: {
+					$or:[
+						{
+							"title": {
+								$regex: `^${QUERY}`, // Query
+								$options: "i"   // 'i' for case-insensitive search
+							},
+						},{
+							"type": {
+								$regex: `^${QUERY}`, // Query
+								$options: "i"   // 'i' for case-insensitive search
+							},
+						},
+						{
+							"status.stage": {STATUS_FILTER}
+						}
+					],
+				}
+			},
+			{ $sort: { _id: -1}},
+			{ $skip: SKIP_VALUE},
+			{ $limit: 10 }
+		]);
+		
+		const EXISTING_MARKETS_COUNT = await MARKET_MODEL?.countDocuments({type: type});
+		return res.status(200).send({
+			error: false,
+			message: 'success',
+			data:	EXISTING_MARKETS,
+			count:	EXISTING_MARKETS_COUNT
+		});
+	}catch(error){
+		LOGGER.log('error',`ERROR[FETCH_MARKET_LIST_ADMIN]{\n\n\n ${error}\n\n\n}`);
 		return res.status(500).json({error:true,message:'we could not fetch markets.'});
 
 	}
@@ -126,7 +199,7 @@ const FETCH_MARKET_DATA_FOR_PAGE=(async(req,res)=>{
 		
 		let RETURN_DATA;
 		// check whether market exists and is approved
-		const projection = { title: 1, image_url: 1, type: 1, description: 1 };
+		const projection = { title: 1, image_url: 1, type: 1, description: 1,status: 1 };
 		const EXISTING_MARKET = await MARKET_MODEL.findOne({_id: MARKET_ID},projection);
 
 		if (!EXISTING_MARKET || EXISTING_MARKET?.status?.stage === 'suspended'){
@@ -304,11 +377,35 @@ const FETCH_MARKET_DATA_FOR_PAGE=(async(req,res)=>{
 			message:'we could not fetch this market data.'
 		});
 	}
-})
+});
+
+const DELETE_MARKET = (async(req,res)=>{
+	const MARKET_ID = req.query.market_id;
+	try{
+		const EXISTING_MARKET = await MARKET_MODEL.findOne({ _id : MARKET_ID })
+		if (!EXISTING_MARKET){
+			return res.status(200).json({
+				error:		true,
+				message:	'A market with this id does not exist'
+			});
+		};
+		await MARKET_MODEL.deleteOne({ _id : MARKET_ID })
+		return res.status(200).send({
+			error: false,
+			message: 'Market deleted successfully'
+		})
+	}catch(error){
+		LOGGER.log('error',`ERROR[DELETE_MARKET]\n\n\n ${error}\n\n\n`);
+		return res.status(500).json({error:true,message:'we could not delete this market.'});
+	}
+});
 
 module.exports = {
 	CREATE_NEW_MARKET,
+	UPDATE_MARKET,
+	DELETE_MARKET,
 	FETCH_MARKET_LIST,
 	FETCH_MARKET_DATA,
-	FETCH_MARKET_DATA_FOR_PAGE
+	FETCH_MARKET_DATA_FOR_PAGE,
+	FETCH_MARKET_LIST_ADMIN
 }

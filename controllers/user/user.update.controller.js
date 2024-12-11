@@ -8,7 +8,7 @@ const {
 	REQUEST_MODEL, 
 	MARKET_MODEL 
 } = require("../../models/PRODUCT.model.js");
-const { SUPPLIER_MODEL, CLIENT_MODEL } = require("../../models/ACCOUNT.model.js");
+const { SUPPLIER_MODEL, CLIENT_MODEL, ADMIN_MODEL, SALESPERSON_MODEL } = require("../../models/ACCOUNT.model.js");
 /****************************CONFIGS*************************************/
 /****************************LIB*****************************************/
 const { LOGGER } = require('../../lib/logger.lib.js');
@@ -41,7 +41,9 @@ const UPDATE_USER_DETAILS = (async (req,res)=>{
 				profile_image_url:		payload?.profile_image_url,
 			}
 		});
-
+		if (payload && payload.role){
+			await ADMIN_MODEL.updateOne({user_model_ref: USER_ID},{$set: {role: payload.role}})
+		};
 		return res.status(200).send({
             error:false,
             message:`Account has been updated successfully`
@@ -120,7 +122,9 @@ const UPDATE_USER_ACCOUNT_DETAILS = (async (req,res)=>{
 			"industry":					payload?.industry,
 			"status.status":			payload?.status,
 			"status.stage":				payload?.status_stage,
+			"consultation.status":		payload?.consultation_status
 		}};
+		console.log(ACCOUNT_TYPE,payload,ACCOUNT_ID)
 		switch (ACCOUNT_TYPE){
 			case 'client':
 				await CLIENT_MODEL.updateOne({user_model_ref: ACCOUNT_ID},UPDATE_DOCUMENT);
@@ -134,6 +138,9 @@ const UPDATE_USER_ACCOUNT_DETAILS = (async (req,res)=>{
 				break;
 			case 'supplier':
 				await SUPPLIER_MODEL.updateOne({user_model_ref: ACCOUNT_ID},UPDATE_DOCUMENT);
+				break;
+			case 'salesperson':
+				await SALESPERSON_MODEL.updateOne({user_model_ref: ACCOUNT_ID},UPDATE_DOCUMENT);
 				break;
 			default:
 				throw new ValidationError('Missing parameter requirements')

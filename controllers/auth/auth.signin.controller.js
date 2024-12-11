@@ -58,7 +58,7 @@ const SIGN_IN_USER=(async(req,res)=>{
 		// UPDATE ACCOUNT ACTIVITY STATUS
 		await ACCOUNT_STATUS_MODEL.updateOne(
 			{ user_model_ref: USER?._id },
-			{ $set:{last_active: new Date(Date.now())} }
+			{ $set:{"last_active": new Date(Date.now())} }
 		)
 		return res.status(200).json({
 			error:		false,

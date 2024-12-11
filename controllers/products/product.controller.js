@@ -477,6 +477,7 @@ const FETCH_PRODUCT_DATA_BY_OWNER = (async(req,res)=>{
 	try{
 		const EXISTING_PRODUCT = await PRODUCT_MODEL.findOne({ _id : PRODUCT_ID })
 			.populate({path:'supplier',select: 'company _id'})
+			.populate({path:'lister',select: 'company _id'})
 			.populate({path:'seller',select: 'company _id'})
 			.populate({path:'industry',select: 'title'})
 			.populate({path:'technology',select: 'title'})

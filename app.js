@@ -24,6 +24,7 @@ const market_routes = require("./routes/MARKET.route.js");
 const request_routes = require("./routes/REQUEST.route.js");
 const support_routes = require('./routes/SUPPORT.route.js');
 const document_routes = require('./routes/DOCUMENT.route.js');
+const sales_routes = require('./routes/SALE.route.js');
 const notifications_routes = require('./routes/NOTIFICATION.route.js');
 
 const MARKETING_EMAIL_ROUTES = require('./routes/email_marketing.route.js');
@@ -38,6 +39,7 @@ app.use("/api/market", market_routes);
 app.use("/api/request", request_routes);
 app.use("/api/support", support_routes);
 app.use("/api/document", document_routes);
+app.use("/api/sales", sales_routes);
 app.use("/api/notifications", notifications_routes);
 /*---control---*/
 

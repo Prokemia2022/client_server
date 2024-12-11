@@ -3,79 +3,7 @@ const { USER_BASE_MODEL, ACCOUNT_STATUS_MODEL } = require("../../models/USER.mod
 const { PRODUCT_MODEL, DOCUMENT_MODEL, MARKET_MODEL } = require("../../models/PRODUCT.model.js");
 const { CLIENT_MODEL, SUPPLIER_MODEL } = require("../../models/ACCOUNT.model.js");
 const mongoose = require('mongoose');
-/*
-const FETCH_ALL_DOCUMENTS=(async(req,res)=>{
-	const QUERY = req.query.query;
-	const DOCUMENT_QUERY = {
-		'status.stage': true,
-		title:	QUERY,
-		$or: { type: QUERY, industry: QUERY, technology: QUERY }
-	}
-	
-	try{
-		const EXISTING_DOCUMENTS = await DOCUMENT_MODEL.find(DOCUMENT_QUERY)
-			.sort({ _id: -1})
-			.populate({path:'product_model_ref',select: 'name'})
-			.populate({path:'industry',select: 'title type'})
-			.populate({path:'technology',select: 'title type'})
-			.populate({path:'user_model_ref',select: 'company'})
-            .exec();
-		;
-		const FILTERED_DOCUMENTS = EXISTING_DOCUMENTS?.filter((document)=> 
-			document?.title?.toLowerCase().includes(QUERY?.toLowerCase()) || 
-			document?.type?.toLowerCase().includes(QUERY?.toLowerCase()) ||
-			document?.industry?.title?.toLowerCase().includes(QUERY?.toLowerCase()) ||
-			document?.technology?.title?.toLowerCase().includes(QUERY?.toLowerCase()) ||
-			document?.user_model_ref?.company?.name?.toLowerCase().includes(QUERY?.toLowerCase())
-		);
 
-		console.log(FILTERED_DOCUMENTS)
-		return res.status(200).send({
-			error:		false,
-			message:	'success',
-			data:		FILTERED_DOCUMENTS,
-		});
-
-	}catch(error){
-		LOGGER.log('error',`System Error: Fetching documents. Error: \n\n\n ${error}\n\n\n`);
-		return res.status(500).json({error:true,message:'we could not fetch documents.'});
-	}
-});
-
-const FETCH_DOCUMENTS_LISTER=(async(req,res)=>{
-	const SUPPLIER_ID = req.query.supplier_id;
-	const DOCUMENT_QUERY = {
-		user_model_ref: SUPPLIER_ID
-	}
-	
-	try{
-		const EXISTING_DOCUMENTS = await DOCUMENT_MODEL.find(DOCUMENT_QUERY)
-			.sort({ _id: -1})
-			.populate({path:'product_model_ref',select: 'name'})
-			.populate({path:'industry',select: 'title type'})
-			.populate({path:'technology',select: 'title type'})
-            .exec();
-		;
-		const FILTERED_DOCUMENTS = EXISTING_DOCUMENTS?.filter((document)=> 
-			document?.title?.toLowerCase().includes(QUERY?.toLowerCase()) || 
-			document?.type?.toLowerCase().includes(QUERY?.toLowerCase()) ||
-			document?.industry?.title?.toLowerCase().includes(QUERY?.toLowerCase()) ||
-			document?.technology?.title?.toLowerCase().includes(QUERY?.toLowerCase())
-		);
-
-		console.log(FILTERED_DOCUMENTS)
-		return res.status(200).send({
-			error:		false,
-			message:	'success',
-			data:		FILTERED_DOCUMENTS,
-		});
-
-	}catch(error){
-		LOGGER.log('error',`System Error: Fetching documents by lister. Error: \n\n\n ${error}\n\n\n`);
-		return res.status(500).json({error:true,message:'we could not fetch documents by lister.'});
-	}
-});
-*/
 const CREATE_NEW_DOCUMENT=(async(req,res)=>{
 	const payload = req.body;
 	const PRODUCT_ID = req.query.product_id || payload?.product_model_ref;
@@ -371,6 +299,124 @@ const FETCH_DOCUMENTS_LISTER=(async(req,res)=>{
 		return res.status(500).json({error:true,message:'we could not fetch documents for this account.'});
 	}
 });
+const FETCH_DOCUMENTS_ADMIN=(async(req,res)=>{
+	const QUERY = req.query.query;
+	const STATUS_FILTER = req.query.status || '';
+	const PAGE = req.query.page;
+	const SKIP_VALUE = (parseInt(PAGE) - 1) * 10  // Used to skip to the next records
+		
+	try{
+		
+		const EXISTING_DOCUMENTS = await DOCUMENT_MODEL.aggregate([
+			{
+				// Populate the lister field
+				$lookup: {
+					from: 'products', // The product collection
+					localField: 'product_model_ref',
+					foreignField: '_id',
+					as: 'product_model_ref', // Will contain populated product_model_ref data
+				},
+			},
+			{
+				// Unwind the populated lister array to a single document
+				$unwind: '$product_model_ref',
+			},
+			{
+				// Populate the industry field
+				$lookup: {
+					from: 'markets', // The industry collection
+					localField: 'industry',
+					foreignField: '_id',
+					as: 'industry', // Will contain populated industry data
+				},
+			},
+			{
+				// Unwind the populated industry array to a single document
+				$unwind: '$industry',
+			},
+			{
+				// Populate the technology field
+				$lookup: {
+					from: 'markets', // The technology collection
+					localField: 'technology',
+					foreignField: '_id',
+					as: 'technology', // Will contain populated technology data
+				},
+			},
+			{
+				// Unwind the populated technology array to a single document
+				$unwind: '$technology',
+			},
+			{
+				$project: {
+					"title":						1,
+					"url":							1,
+					"type":							1,
+					"product_model_ref._id":		1,
+					"product_model_ref.name":		1,
+					"industry.title":				1,
+					"industry.type":				1,
+					"technology.title":				1,
+					"technology.type":				1,
+					"status":						1,
+					"statistics":					1,
+					"createdAt": 1
+				}
+			},
+			{
+				// Match products whose brand, name, industry, technology, seller, supplier, chemical_name, description, application, starts with the query, e.g., 'rhe'
+				$match: {
+					$or:[
+						{
+							"title": {
+								$regex: `^${QUERY}`, // Query
+								$options: "i"   // 'i' for case-insensitive search
+							},
+						},{
+							"product_model_ref.name": {
+								$regex: `^${QUERY}`, // Query
+								$options: "i"   // 'i' for case-insensitive search
+							},
+						},
+						{
+							"industry.title": {
+								$regex: `^${QUERY}`, // Query
+								$options: "i"   // 'i' for case-insensitive search
+							},
+						},
+						{
+							"technology.title": {
+								$regex: `^${QUERY}`, // Query
+								$options: "i"   // 'i' for case-insensitive search
+							}
+						},
+						{
+							"type": {
+								$regex: `^${QUERY}`, // Query
+								$options: "i"   // 'i' for case-insensitive search
+							}
+						},
+						
+					],
+				}
+			},
+			{ $sort: { _id: -1}},
+			{ $skip: SKIP_VALUE},
+			{ $limit: 10 }
+		]);
+		const EXISTING_DOCUMENTS_COUNT = await DOCUMENT_MODEL.countDocuments();
+		return res.status(200).send({
+			error:		false,
+			message:	'success',
+			data:		EXISTING_DOCUMENTS,
+			count:		EXISTING_DOCUMENTS_COUNT
+		});
+
+	}catch(error){
+		LOGGER.log('error',`ERROR[FETCH DOCUMENTS ADMIN] \n\n\n ${error}\n\n\n`);
+		return res.status(500).json({error:true,message:'we could not fetch documents.'});
+	}
+});
 
 module.exports = {
 	//FETCH_ALL_DOCUMENTS,
@@ -378,5 +424,6 @@ module.exports = {
 	FETCH_DOCUMENTS_PRODUCT,
 	CREATE_NEW_DOCUMENT,
 	UPDATE_DOCUMENT,
-	DELETE_DOCUMENT
+	DELETE_DOCUMENT,
+	FETCH_DOCUMENTS_ADMIN
 }

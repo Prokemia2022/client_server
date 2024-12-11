@@ -46,7 +46,7 @@ router.post('/signin',
 	SIGN_IN_USER
 );
 
-router.put('/refresh/sesion', REFRESH_USER_TOKEN);
+router.put('/refresh/session', REFRESH_USER_TOKEN);
 
 // Password
 router.get('/password/code',
