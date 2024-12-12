@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { Schema } = require("mongoose");
+const AutoIncrement = require('mongoose-sequence')(mongoose);
 
 const PRODUCT_SCHEMA_MODEL = new mongoose.Schema({
 	name:			{ type: String },
@@ -88,11 +89,12 @@ const ORDER_SCHEMA_MODEL = new Schema({
 	user_model_ref:			{ type: mongoose.Schema.Types.ObjectId, ref: 'USER' }, // creator of order
 	salesperson_model_ref:	{ type: mongoose.Schema.Types.ObjectId, ref: 'SALESPERSON' }, // salesperson account
 	market:					{ industry: String, technology: String },
+	invoiceNumber:			{ type: String },
 	client:					{ name: String },
-	company:				{ name: String, mobile: String, email: String, address: String },
+	company:				{ name: String, mobile: String, email: String, address: String, kra_pin: String },
 	product:				[{ name: String, quantity: Number, price: Number, unit: String, id: mongoose.Schema.Types.ObjectId }],
 	delivery:				{ terms: String, date: Date },
-	payment:				{ terms: String, date: Date },
+	payment:				{ terms: String, date: Date, dueDate: Date},
 	notification:			{ status: Boolean, email: Boolean, sms: Boolean, push: Boolean },
 	status:					{
 								status: Boolean, 
@@ -103,11 +105,49 @@ const ORDER_SCHEMA_MODEL = new Schema({
 							},
 	billing:				{
 								status: Boolean, 
-								stage: String, //pending,approval,suspension,draft 
+								stage: String, //paid, unpaid, overdue 
 								comment: String, 
 								date: Date,
 							},
+	seq_id:                 { type: Number }
 },{ timestamps: true });
+
+ORDER_SCHEMA_MODEL.plugin(AutoIncrement, {
+    id: 'invoice_counter', // Unique identifier for the counter
+    inc_field: 'seq_id', // Field to store the incremented value
+    start_seq: 100000, // Starting number
+});
+
+// Post save hook to ensure invoiceNumber is set
+ORDER_SCHEMA_MODEL.post('save', async function(doc) {
+    if (!doc.invoiceNumber && doc.seq_id) {
+        await mongoose.models.ORDER.findByIdAndUpdate(doc._id, {
+            invoiceNumber: `IC-${doc.seq_id}`
+        }, { new: true });
+    }
+});
+
+ORDER_SCHEMA_MODEL.statics.aggregateTotalPaidByCriteria = async function(criteria = {}) {
+    return this.aggregate([
+        {
+            $match: criteria // Allow filtering by any criteria
+        },
+        {
+            $unwind: '$product'
+        },
+        {
+            $group: {
+				_id: null,
+                totalPaidAmount: { 
+                    $sum: { 
+                        $multiply: ['$product.quantity', '$product.price'] 
+                    } 
+                },
+                totalOrders: { $sum: 1 },
+            }
+        }
+    ]);
+};
 
 const REQUEST_MODEL_SCHEMA = new Schema({
 	type:					{ type: String }, //sample or quote
@@ -184,5 +224,5 @@ module.exports = {
 	DOCUMENT_MODEL,
 	MARKET_MODEL,
 	ORDER_MODEL,
-	REQUEST_MODEL
+	REQUEST_MODEL,
 }

@@ -2,7 +2,7 @@
 const mongoose = require('mongoose');
 /****************************MODELS**************************************/
 const { USER_BASE_MODEL, ACCOUNT_STATUS_MODEL } = require("../../models/USER.model.js");
-const { DOCUMENT_MODEL, PRODUCT_MODEL, REQUEST_MODEL, MARKET_MODEL } = require("../../models/PRODUCT.model.js");
+const { DOCUMENT_MODEL, PRODUCT_MODEL, REQUEST_MODEL, MARKET_MODEL, ORDER_MODEL } = require("../../models/PRODUCT.model.js");
 const { SUPPLIER_MODEL, CLIENT_MODEL } = require("../../models/ACCOUNT.model.js");
 /****************************CONFIGS*************************************/
 /****************************LIB*****************************************/
@@ -1241,8 +1241,8 @@ const FETCH_SALESPERSON_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 	try{
 		const USER_ID = req.query.salesperson_id;
 
-		const PRODS_PAGE = req.query.prods_page || 1;
-		const PRODS_SKIP_VALUE = (parseInt(PRODS_PAGE) - 1) * 10  // Used to skip to the next records
+		const ORDERS_PAGE = req.query.orders_page || 1;
+		const ORDERS_SKIP_VALUE = (parseInt(ORDERS_PAGE) - 1) * 10  // Used to skip to the next records
 		
 		let RETURN_DATA;
 		const EXISTING_CLIENT = await USER_BASE_MODEL.findOne({_id: USER_ID}).populate('salesperson_account_model_ref').populate('account_status_model_ref').exec();
@@ -1252,13 +1252,46 @@ const FETCH_SALESPERSON_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 				message:	'This client does not exist.'
 			});
 		};
+		const EXISTING_ORDERS = await ORDER_MODEL.find({user_model_ref: USER_ID})
+			.sort({_id: -1})
+			.skip(ORDERS_SKIP_VALUE)
+			.limit(10)
+			.exec();
+		const EXISTING_ORDERS_COUNT = await ORDER_MODEL.countDocuments({user_model_ref: new mongoose.Types.ObjectId(USER_ID)});
 		// Compile data
 		RETURN_DATA={
 			user_data:		EXISTING_CLIENT,
 			/*********************products*******************************/
-			products:		[],
-			products_count: 0,
+			orders:		EXISTING_ORDERS,
+			orders_count: EXISTING_ORDERS_COUNT,
+			orders_analytics: {
+				rejected:	await ORDER_MODEL.countDocuments({
+					user_model_ref: USER_ID,
+					"status.stage": 'rejected'
+				}),
+				deleted:	await ORDER_MODEL.countDocuments({
+					user_model_ref: USER_ID,
+					"status.stage": 'deleted'
+				}),
+				processing:	await ORDER_MODEL.countDocuments({
+					user_model_ref: USER_ID,
+					"status.stage": 'processing'
+				}),
+				pending:	await ORDER_MODEL.countDocuments({
+					user_model_ref: USER_ID,
+					"status.stage": 'pending'
+				}),
+				approved:	await ORDER_MODEL.countDocuments({
+					user_model_ref: USER_ID,
+					"status.stage": 'approved'
+				}),
+				total_paid: await ORDER_MODEL.aggregateTotalPaidByCriteria({
+					user_model_ref:  new mongoose.Types.ObjectId(USER_ID),
+					"status.stage": 'pending'
+				})
+			},
 		};
+		console.log("salesperson",RETURN_DATA)
 		return res.status(200).send({
 			error:		false,
 			message:	'success',

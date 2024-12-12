@@ -40,7 +40,7 @@ const SALESPERSON_MODEL_SCHEMA = new Schema({
 		address: String,
 		position: String,
 	},
-	orders:				{ type: mongoose.Schema.Types.ObjectId, ref: 'ORDER' },
+	orders:				[{ type: mongoose.Schema.Types.ObjectId, ref: 'ORDER' }],
 	status:				{ status: Boolean, stage: String, comment: String },
 	consultation:		{ 
 		status: Boolean, // active consultation is active or not

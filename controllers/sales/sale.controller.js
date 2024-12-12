@@ -47,14 +47,17 @@ const CREATE_ORDER=(async(req, res)=>{
             company: {
                 name: payload?.company_name,
                 address: payload?.company_address,
-                phone: payload?.company_mobile,
-                email: payload?.company_email
+                mobile: payload?.company_mobile,
+                email: payload?.company_email,
+				kra_pin: payload?.kra_pin
             },
             delivery: {
-                terms: payload?.delivery_terms,
+                terms: 	payload?.delivery_terms,
+				date:	payload?.delivery_date
             },
             payment: {
-                terms: payload?.payment_terms,
+                terms:  payload?.payment_terms,
+				dueDate:payload?.payment_due_date,
             },
 			status:	{
 				status:				true,
@@ -86,7 +89,44 @@ const CREATE_ORDER=(async(req, res)=>{
 		return res.status(500).json({error:true,message:'we could not create this order.'});
 	}
 });
+const UPDATE_ORDER=(async(req, res)=>{
+	const payload = req.body;
+	const ORDER_ID = req.query.order_id;
+	console.log(ORDER_ID,payload)
 
+	try{
+		await ORDER_MODEL.updateOne({_id: ORDER_ID},{$set:{
+			product:                payload.products,
+			"market.industry": payload?.market_industry,
+			"market.technology": payload?.market_technology,
+            "client.name":  payload?.client_name,
+			"company.name": payload?.company_name,
+			"company.address": payload?.company_address,
+            "company.mobile": payload?.company_mobile,
+            "company.email": payload?.company_email,
+            "company.kra_pin": payload?.kra_pin,
+            "delivery.terms":     payload?.delivery_terms,
+			"delivery.date":    payload?.delivery_date,
+            "payment.terms":     payload?.payment_terms,
+            "payment.dueDate": payload?.payment_due_date,
+			status:	{
+				status:				true,
+				stage:				'pending',
+				comment: '',
+				date:				new Date(Date.now())
+			},
+		}});
+
+		return res.status(200).send({
+			error: false,
+			message: 'Order updated successfully'
+		})
+
+	}catch(error){
+		LOGGER.log('error',`ERROR[UPDATE_ORDER]: \n\n\n ${error}\n\n\n`);
+		return res.status(500).json({error:true,message:'we could not update this order.'});
+	}
+});
 const FETCH_ALL_ORDERS=(async(req,res)=>{
 	const ACCOUNT_ID = req.query.account_id;
     const QUERY = req.query.query;
@@ -94,14 +134,12 @@ const FETCH_ALL_ORDERS=(async(req,res)=>{
 	const SKIP_VALUE = (parseInt(PAGE) - 1) * 10;
     const ORDER_QUERY = { 
         salesperson_model_ref: ACCOUNT_ID,
-        // $or: [
-        //     { "product.name": QUERY},
-        //     { "client.name": QUERY},
-        //     { "company.name": QUERY},
-        //     { "company.email": QUERY},
-        //     { "market.industry": QUERY},
-        //     { "market.technology": QUERY},
-        // ] 
+        $or: [
+            { "product.name": { $regex: QUERY, $options: 'i' }},
+            { "client.name": { $regex: QUERY, $options: 'i' }},
+            { "company.name": { $regex: QUERY, $options: 'i' }},
+            { "invoiceNumber": { $regex: QUERY, $options: 'i' }},
+        ] 
     };
 
 	try{
@@ -122,7 +160,6 @@ const FETCH_ALL_ORDERS=(async(req,res)=>{
 		return res.status(500).json({error:true,message:'we could not fetch orders.'});
 	}
 });
-
 const FETCH_ORDER_DATA=(async(req,res)=>{
 	const ORDER_ID = req.query.order_id;
 	try{
@@ -148,9 +185,37 @@ const FETCH_ORDER_DATA=(async(req,res)=>{
 		return res.status(500).json({error:true,message:'we could not fetch this order.'});
 	}
 });
+const DELETE_ORDER = (async(req,res)=>{
+	const ORDER_ID = req.query.order_id;
+	try{
+		await ORDER_MODEL.updateOne(
+			{_id: ORDER_ID},
+			{ $set:{
+				"status.status": false,
+				"status.stage": 'deleted',
+				"status.date": new Date(Date.now() + 30*24*60*60*1000),
+				"status.comment":'Order deleted',
+				}
+			}) 
+		// send email notification to notify lister of the deleted product
+		return res.status(200).send({
+			error: false,
+			message: 'Order deleted successfully'
+		})
+	}catch(error){
+		LOGGER.log('error',`
+			Function: [DELETE_ORDER],
+			ID: ${ORDER_ID}, 
+			error: ${error}
+		`);
+		return res.status(500).json({error:true,message:'Order could not be deleted'});
+	}
+});
 
 module.exports = {
     CREATE_ORDER,
     FETCH_ALL_ORDERS,
-	FETCH_ORDER_DATA
+	FETCH_ORDER_DATA,
+	UPDATE_ORDER,
+	DELETE_ORDER
 }
