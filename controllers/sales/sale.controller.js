@@ -110,8 +110,8 @@ const UPDATE_ORDER=(async(req, res)=>{
             "payment.terms":     payload?.payment_terms,
             "payment.dueDate": payload?.payment_due_date,
 			status:	{
-				status:				true,
-				stage:				'pending',
+				status:				payload?.status,
+				stage:				payload?.status_stage,
 				comment: '',
 				date:				new Date(Date.now())
 			},
@@ -128,27 +128,43 @@ const UPDATE_ORDER=(async(req, res)=>{
 	}
 });
 const FETCH_ALL_ORDERS=(async(req,res)=>{
+	const account_type = req.user.account_type;
+	console.log(account_type)
 	const ACCOUNT_ID = req.query.account_id;
     const QUERY = req.query.query;
 	const PAGE = req.query.page || 1;
 	const SKIP_VALUE = (parseInt(PAGE) - 1) * 10;
-    const ORDER_QUERY = { 
-        salesperson_model_ref: ACCOUNT_ID,
-        $or: [
+	let ORDER_QUERY = {
+		$or: [
             { "product.name": { $regex: QUERY, $options: 'i' }},
             { "client.name": { $regex: QUERY, $options: 'i' }},
             { "company.name": { $regex: QUERY, $options: 'i' }},
             { "invoiceNumber": { $regex: QUERY, $options: 'i' }},
         ] 
     };
-
+	if(account_type === 'salesperson'){
+		ORDER_QUERY.salesperson_model_ref = ACCOUNT_ID ;
+	}
+    // const ORDER_QUERY = { 
+    //     salesperson_model_ref: ACCOUNT_ID,
+    //     $or: [
+    //         { "product.name": { $regex: QUERY, $options: 'i' }},
+    //         { "client.name": { $regex: QUERY, $options: 'i' }},
+    //         { "company.name": { $regex: QUERY, $options: 'i' }},
+    //         { "invoiceNumber": { $regex: QUERY, $options: 'i' }},
+    //     ] 
+    // };
 	try{
 		const EXISTING_ORDERS = await ORDER_MODEL.find(ORDER_QUERY)
 			.sort({_id: -1})
 			.skip(SKIP_VALUE)
 			.limit(10)
 			.exec();
-		const EXISTING_ORDERS_COUNT = await ORDER_MODEL.countDocuments({salesperson_model_ref: ACCOUNT_ID})
+		ORDER_QUERY = {}
+		if(account_type === 'salesperson'){
+			ORDER_QUERY = { salesperson_model_ref: ACCOUNT_ID }
+		}
+		const EXISTING_ORDERS_COUNT = await ORDER_MODEL.countDocuments(ORDER_QUERY)
 		return res.status(200).json({
 			error: false,
 			message: 'Success',
