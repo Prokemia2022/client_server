@@ -21,6 +21,8 @@ const {
 	NOTIFY_CLIENT_REQUEST_COMPLETED_EMAIL_TEMPLATE, 
 	NOTIFY_CLIENT_REQUEST_REJECTED_EMAIL_TEMPLATE 
 } = require("../../lib/email_templates/request.email_template.js");
+const { ADMIN_MODEL } = require("../../models/ACCOUNT.model.js");
+const { USER_BASE_MODEL } = require("../../models/USER.model.js");
 
 const QUEUE_NOTIFICATION=async(userId, toAdmin, notificationType, payload)=>{
 	try{
@@ -82,8 +84,13 @@ async function FETCH_UNREAD_NOTIFICATIONS(req, res, next) {
 		if(!userId){
             throw new ValidationError('User ID not found')
         };
-		const query = {$or: [{"status.read": false}]};
-		const EXISTING_NOTIFICATIONS = await NOTIFICATION_MODEL.find({userId: userId});
+		const query = {
+			userId: { $in: userId }, 
+			notificationType: 'inapp',
+			"status.read": false,
+			"status.status": "pending",
+		};
+		const EXISTING_NOTIFICATIONS = await NOTIFICATION_MODEL.find(query).sort({createdAt: -1});
 		const EXISTING_NOTIFICATIONS_COUNT = EXISTING_NOTIFICATIONS?.length;
 		return res.status(200).send({
 			error: false,
@@ -102,17 +109,23 @@ async function FETCH_UNREAD_NOTIFICATIONS(req, res, next) {
 };
 
 // Function to mark notifications as read
-async function markNotificationsAsRead(notificationIds) {
-	try{
-		await NOTIFICATION_MODEL.updateMany(
-			{ _id: { $in: notificationIds } },
-			{ $set: { "status.read": true } }
+async function MARK_NOTIFICATION_AS_READ(req,res) {
+	try {
+		const notificationIds = req.body?.notificationIds;
+		console.log(notificationIds)
+		await NOTIFICATION_MODEL.updateOne(
+		  { _id: notificationIds },
+		  { $set: { "status.read": true } }
 		);
-	}catch(error){
-		LOGGER.log('error',`ERROR[markNotificationsAsRead]:${error}`);
-		throw new Error('The users notifications could not be marked as read')
+		return res.status(200).send({
+			error: false,
+            message: 'notifications marked as read'
+		});
+	} catch (error) {
+		LOGGER.log('error',`ERROR[MARK_NOTIFICATION_AS_READ]:${error}`);
+		return res.sendStatus(500);
 	}
-};
+  }
 
 async function HANDLE_EMAIL_NOTIFICATIONS(payload){
 	let _TEMPLATE;
@@ -176,34 +189,143 @@ async function HANDLE_EMAIL_NOTIFICATIONS(payload){
 	}
 }
 
-async function SEND_FCM_NOTIFICATION(notification){
-	const message = {
-		notification: {
-		  title: notification?.payload?.title,
-		  body:  notification?.payload?.body,
-		},
-		webpush: {
-			fcm_options: {
-			  link: notification?.payload?.action_url, // URL you want to open on click
-			}
-		},
-		token: notification?.payload?.token,
-	};
-	messaging.send(message)
-	.then((response) => {
-		LOGGER.log('info','SUCCESS[SEND_FCM_NOTIFICATION]:', response);
-	})
-	.catch((error) => {
-		console.log('error',`ERROR[SEND_FCM_NOTIFICATION]:${error}`);
-		throw new Error(error);
-	});
+async function SEND_FCM_NOTIFICATION(notification) {
+    try {
+        // Get user accounts and validate
+        const EXISTING_ACCOUNTS = await USER_BASE_MODEL.find({
+            _id: { $in: notification?.userId },
+            fcm_token: { $exists: true, $ne: null } // Only get users with valid tokens
+        });
+
+        if (!EXISTING_ACCOUNTS.length) {
+            LOGGER.log('warn', 'No valid users found for FCM notification');
+            return {
+                success: false,
+                message: 'No valid users found with FCM tokens'
+            };
+        }
+
+        // Filter out null/undefined tokens and get unique tokens
+        const tokens = [...new Set(
+            EXISTING_ACCOUNTS
+                .map(user => user?.fcm_token)
+                .filter(token => token)
+        )];
+
+        if (!tokens.length) {
+            LOGGER.log('warn', 'No valid FCM tokens found');
+            return {
+                success: false,
+                message: 'No valid FCM tokens available'
+            };
+        }
+
+        LOGGER.log('info', `Sending FCM to ${tokens.length} devices`);
+
+        // Create messages array for each token
+        const messages = tokens.map(token => ({
+            token,  // Individual token for each message
+            notification: {
+                title: notification?.payload?.subject,
+                body: notification?.payload?.body,
+            },
+            webpush: {
+                fcmOptions: {
+                    link: `${process.env.BASE_NOTIFICATION_URL}${notification?.payload?.actionUrl}`,
+                },
+                notification: {
+                    click_action: `${process.env.BASE_NOTIFICATION_URL}${notification?.payload?.actionUrl}`,
+                }
+            },
+            data: {
+                notificationId: notification._id.toString(),
+                moduleType: notification?.moduleType || '',
+                timestamp: new Date().toISOString(),
+                ...(notification?.payload?.data || {})
+            }
+        }));
+
+        // Send messages
+        const response = await messaging.sendEach(messages);
+
+        // Handle partial failures and invalid tokens
+        if (response.failureCount > 0) {
+            const failedTokens = [];
+            response.responses.forEach((resp, idx) => {
+                if (!resp.success) {
+                    failedTokens.push({
+                        token: tokens[idx],
+                        error: resp.error
+                    });
+
+                    LOGGER.log('error', `FCM failure for token: ${tokens[idx]}`, resp.error);
+                }
+            });
+
+            // Handle invalid tokens
+            if (failedTokens.length > 0) {
+                await handleFailedTokens(failedTokens);
+            }
+        }
+
+        LOGGER.log('info', 'SUCCESS[SEND_FCM_NOTIFICATION]:', {
+            successCount: response.successCount,
+            failureCount: response.failureCount
+        });
+
+        return {
+            success: true,
+            successCount: response.successCount,
+            failureCount: response.failureCount
+        };
+
+    } catch (error) {
+        // Handle specific FCM errors
+        let errorMessage = error.message;
+        
+        if (error.code === 'messaging/invalid-argument') {
+            errorMessage = 'Invalid message format';
+        } else if (error.code === 'messaging/registration-token-not-registered') {
+            errorMessage = 'One or more FCM tokens are invalid or expired';
+        } else if (error.code === 'messaging/quota-exceeded') {
+            errorMessage = 'FCM quota exceeded. Please try again later';
+        } else if (error.code === 'messaging/sender-id-mismatch') {
+            errorMessage = 'FCM sender ID mismatch';
+        }
+
+        LOGGER.log('error', `ERROR[SEND_FCM_NOTIFICATION]: ${errorMessage}`, error);
+        throw new Error(errorMessage);
+    }
 }
+
+async function handleFailedTokens(failedTokens) {
+    try {
+        const invalidTokens = failedTokens.filter(({ error }) => 
+            error.code === 'messaging/invalid-registration-token' ||
+            error.code === 'messaging/registration-token-not-registered'
+        ).map(({ token }) => token);
+
+        if (invalidTokens.length > 0) {
+            // Remove invalid tokens from users
+            await USER_BASE_MODEL.updateMany(
+                { fcm_token: { $in: invalidTokens } },
+                { $unset: { fcm_token: "" } }
+            );
+
+            LOGGER.log('info', `Removed ${invalidTokens.length} invalid FCM tokens`);
+        }
+    } catch (error) {
+        LOGGER.log('error', 'Error handling failed tokens:', error);
+    }
+}
+
+
 
 module.exports = {
 	SAVE_NOTIFICATION,
 	FETCH_UNREAD_NOTIFICATIONS,
-	markNotificationsAsRead,
+	MARK_NOTIFICATION_AS_READ,
 	QUEUE_NOTIFICATION,
 	HANDLE_EMAIL_NOTIFICATIONS,
-	SEND_FCM_NOTIFICATION
+	SEND_FCM_NOTIFICATION,
 };

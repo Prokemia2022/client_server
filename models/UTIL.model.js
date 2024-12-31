@@ -2,10 +2,11 @@ const mongoose = require("mongoose");
 
 // Define the Notification Schema
 const NOTIFICATION_SCHEMA_MODEL = new mongoose.Schema({
-	userId:				{ type: mongoose.Schema.Types.ObjectId, required: true },
+	userId:				[{ type: mongoose.Schema.Types.ObjectId, required: true }],
 	toAdmin:			{ type: Boolean },
 	notificationType:	{ type: String, required: true }, // 'websocket', 'push', 'email'
-	payload:			{ type: Object, required: true }, // Actual notification data
+	moduleType:			{ type: String, required: true}, // auth, products, orders, requests
+	payload:			{ type: Object, required: true }, // Actual notification data: Subject, Body, Action
 	status:				{ sent: Boolean, read: Boolean, status: String }, //
 	retryCount:			{ type: Number, default: 0 },
 	priority:			{ type: Number, default: 2}, // priority: 0: , 1: , 2: , 3: , 4: , 5: 

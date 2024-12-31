@@ -5,6 +5,8 @@ const { PUBLISH_MESSAGE_TO_BROKER } = require("../../middleware/MESSAGE_BROKER/P
 const { CODE_TOKEN_GENERATOR } =  require("../../middleware/token.handler.middleware.js");
 const CODE_GENERATOR_FUNC = require("../../middleware/code_generator.js");
 const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
+const NOTIFICATION_SERVICE = require('../notifications/service.js');
+
 /****************************CONFIGS***********************************/
 /****************************LIB***************************************/
 const { LOGGER } = require("../../lib/logger.lib.js");
@@ -27,8 +29,25 @@ const HANDLE_SEND_CODE_NOTIFICATIONS = async (user,code) => {
 		code:		code
     };
     
-    // Uncomment when message broker is ready
-    await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,emailPayload);
+    // // Uncomment when message broker is ready
+    
+    // await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,emailPayload);
+    
+    // send notification to new account created to user.
+    await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+        userIds: [userId],
+        notificationTypes: ['email'],
+        moduleType: 'password.code.request',
+        payload: {
+            subject: 'Password Reset OTP Code',
+            body: '',   
+            name: user?.first_name,
+            email: user?.email,
+            _id: user?._id,
+    		code:		code
+        },
+        priority: 2
+    });
 };
 
 const HANDLE_PASSWORD_CHANGED_NOTIFICATIONS = async (user) => {
@@ -45,7 +64,22 @@ const HANDLE_PASSWORD_CHANGED_NOTIFICATIONS = async (user) => {
     };
     
     // Uncomment when message broker is ready
-    await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,emailPayload);
+    //await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,emailPayload);
+    
+    // send notification to new account created to user.
+    await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+        userIds: [userId],
+        notificationTypes: ['email'],
+        moduleType: 'password.change.success',
+        payload: {
+            subject: 'Password Reset Confirmation!',
+            body: '',   
+            name: user?.first_name,
+            email: user?.email,
+            _id: user?._id,
+        },
+        priority: 2
+    });
 };
 
 /****************************FUNCTION**********************************/

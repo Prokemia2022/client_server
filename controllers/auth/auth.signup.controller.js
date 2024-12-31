@@ -4,6 +4,7 @@ const { HASH_STRING } = require('../../middleware/Hash.middleware.js');
 const { AUTH_TOKEN_GENERATOR } = require('../../middleware/token.handler.middleware.js');
 const { PUBLISH_MESSAGE_TO_BROKER } = require('../../middleware/MESSAGE_BROKER/PUBLISH_MESSAGE_TO_BROKER.js');
 const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
+const NOTIFICATION_SERVICE = require('../notifications/service.js');
 /****************************CONFIGS***********************************/
 /****************************LIB***************************************/
 const { LOGGER } = require('../../lib/logger.lib.js');
@@ -82,8 +83,49 @@ const NEW_USER_ACCOUNT = (async(req, res)=>{
         await CREATE_SPECIFIC_ACCOUNT(NEW_BASE_USER, payload);
 
 		// Handle notifications
-        await HANDLE_NOTIFICATIONS(NEW_BASE_USER, payload);
-
+        // send notification to admins of new account creation
+        // await HANDLE_NOTIFICATIONS(NEW_BASE_USER, payload);
+        // Send notification to sales and supervisor admins
+        let actionUrl;
+        switch(NEW_BASE_USER?.account_type){
+            case 'client':
+                actionUrl = `/admin/clients/client?client_id=${NEW_BASE_USER._id}`;
+                break;
+            case'supplier':
+                actionUrl = `/admin/suppliers/supplier?supplier_id=${NEW_BASE_USER._id}`;
+                break;
+            case 'admin':
+                actionUrl = `/admin/admins/admin?admin_id=${NEW_BASE_USER._id}`;
+                break;
+            case'salesperson':
+                actionUrl = `/admin/salespeople/user?salesperson_id=${NEW_BASE_USER._id}`;
+                break;
+        }
+        await NOTIFICATION_SERVICE.ADMIN_NOTIFICATIONS_HANDLER({
+            roles: ['super'],
+            notificationTypes: ['inapp','fcm'],
+            moduleType: 'user.created',
+            payload: {
+                subject: 'A new user has created an account.',
+                body: `${NEW_BASE_USER?.first_name} has created a new ${NEW_BASE_USER?.account_type} account`,
+                actionUrl: actionUrl,
+            },
+            priority: 2
+        });
+        // send notification to new account created to user.
+        await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+            userIds: [NEW_BASE_USER?._id],
+            notificationTypes: ['email'],
+            moduleType: 'user.created',
+            payload: {
+                subject: 'Welcome to Prokemia',
+                body: '',   
+                name: NEW_BASE_USER?.first_name,
+                email: NEW_BASE_USER?.email,
+                _id: NEW_BASE_USER?._id
+            },
+            priority: 2
+        });
 		
 		LOGGER.log('info',`SUCCESS[NEW_USER_ACCOUNT: ${payload?.account_type} ACCOUNT CREATED]:${payload?.first_name}`);
 

@@ -2,7 +2,8 @@ const { NOTIFICATION_MODEL } =  require('../../models/UTIL.model.js');
 const { LOGGER } = require("../../lib/logger.lib.js");
 const cron = require('node-cron');
 
-const { HANDLE_EMAIL_NOTIFICATIONS, SEND_FCM_NOTIFICATION } = require('./index.js')
+const { HANDLE_EMAIL_NOTIFICATIONS, SEND_FCM_NOTIFICATION } = require('./index.js');
+const NOTIFICATION_SERVICE = require('./service.js')
 const MAX_RETRY_COUNT = 5;
 const RETRY_DELAY = 3000; // Delay between retries in milliseconds
 
@@ -10,7 +11,7 @@ const PROCEESS_NOTIFICATION_QUEUE = async () => {
 	//LOGGER.log('info',`[PROCEESS_NOTIFICATION_QUEUE]: Notification Worker`);
 	// Find pending notifications
 	const PENDING_NOTIFICATIONS = await NOTIFICATION_MODEL.find({
-		notificationType: { $ne: "in-app" },
+		notificationType: { $ne: "inapp" },
 		"status.sent": false,
 		"status.status": "pending"
 	}).sort({ priority: -1 });
@@ -22,14 +23,14 @@ const PROCEESS_NOTIFICATION_QUEUE = async () => {
 					if (process.env.ACTIVATE_FCM_NOTIFICATION_FLAG === 'true'){
 						await SEND_FCM_NOTIFICATION(notification)
 					}else{
-						throw new Error('Notification type not active')
+						throw new Error('FCM Notification type not active');
 					}
 					break;
 				case 'email':
 					if (process.env.ACTIVATE_EMAIL_NOTIFICATION_FLAG === 'true'){
-						await HANDLE_EMAIL_NOTIFICATIONS(notification)
+						await NOTIFICATION_SERVICE.HANDLE_EMAIL_NOTIFICATIONS(notification)
 					}else{
-						throw new Error('Notification type not active')
+						throw new Error('Email Notification type not active');
 					}
 					break;
 				case 'sms':

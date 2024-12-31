@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 const { AUTH_TOKEN_GENERATOR } = require('../../middleware/token.handler.middleware.js');
 const { PUBLISH_MESSAGE_TO_BROKER } = require("../../middleware/MESSAGE_BROKER/PUBLISH_MESSAGE_TO_BROKER.js");
 const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
+const NOTIFICATION_SERVICE = require('../notifications/service.js')
 /****************************MODELS************************************/
 const { 
 	USER_BASE_MODEL, 
@@ -51,8 +52,20 @@ const SIGN_IN_USER=(async(req,res)=>{
 			account_type:	USER?.account_type
 		});
 
-		// Handle notifications
-        await HANDLE_NOTIFICATIONS(USER);
+		// send notification to new account created to user.
+		await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+			userIds: [USER?._id],
+			notificationTypes: ['email'],
+			moduleType: 'user.signedin',
+			payload: {
+				subject: 'Welcome back to Prokemia',
+				body: '',   
+				name: USER?.first_name,
+				email: USER?.email,
+				_id: USER?._id
+			},
+			priority: 2
+		});
 		
 		LOGGER.log('info',`[USER SIGNED IN]`);
 		// UPDATE ACCOUNT ACTIVITY STATUS
