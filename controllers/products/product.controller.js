@@ -14,6 +14,8 @@ const { SUPPLIER_MODEL, CLIENT_MODEL } = require("../../models/ACCOUNT.model.js"
 const { LOGGER } = require('../../lib/logger.lib.js');
 const { ValidationError } = require('../../lib/error.lib.js');
 const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
+const NOTIFICATION_SERVICE = require('../notifications/service.js');
+
 /****************************CONSTANTS*********************************/
 /****************************HELPER FUNCTIONS**************************/
 /****************************FUNCTIONS***********************************/
@@ -123,43 +125,31 @@ const CREATE_NEW_PRODUCT = (async(req,res)=>{
 		} });
 		LOGGER.log('info',`SUCCESS[CREATE_NEW_PRODUCT]: ${NEW_PRODUCT_ITEM?.name}`);
 
-		// send notification on product creation
-		let NOTIFICATION_TO_USER;
-		let TO_ADMIN;
-		let NOTIFICATION_PAYLOAD;
-		let ACTION_URL;
-		const ADMIN_TO_RECEIVE_NOTIFICATION = await USER_BASE_MODEL?.find({account_type:'admin'},{first_name:1,fcm_token:1});
-		for (const user of ADMIN_TO_RECEIVE_NOTIFICATION){
-			NOTIFICATION_TO_USER = user;
-			ACTION_URL = `${process.env.BASE_NOTIFICATION_URL}/admin/products/product?product_id=${NEW_PRODUCT_ITEM?._id}`;
-			TO_ADMIN=true;
-			NOTIFICATION_PAYLOAD = {
-				title: 'Product Created',
-                body: `Hey there, ${NEW_PRODUCT_ITEM?.name} has just been created and is waiting to be reviewed!`,
-                action_url: ACTION_URL,
-                type: 'product.created',
-                product_id: NEW_PRODUCT_ITEM?._id,
-				token: NOTIFICATION_TO_USER?.fcm_token,
-				priority: 3,
-                notification_date: new Date(Date.now())
-			}
-			await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,'fcm',NOTIFICATION_PAYLOAD); // fcm
-			await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,'in-app',NOTIFICATION_PAYLOAD); // fcm
-		};
-		NOTIFICATION_TO_USER = EXISTING_ACCOUNT;
-		ACTION_URL = `${process.env.BASE_NOTIFICATION_URL}/supplier/products/product?product_id=${NEW_PRODUCT_ITEM?._id}`;
-		TO_ADMIN=false;
-		NOTIFICATION_PAYLOAD = {
-			title: 'Product Created',
-			body: `Hey there, ${NEW_PRODUCT_ITEM?.name} has just been created and is waiting to be reviewed!`,
-			action_url: ACTION_URL,
-			type: 'product.created',
-			product_id: NEW_PRODUCT_ITEM?._id,
-			token: NOTIFICATION_TO_USER?.fcm_token,
-			priority: 3,
-			notification_date: new Date(Date.now())
-		}
-		await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,'in-app',NOTIFICATION_PAYLOAD); // fcm
+		await NOTIFICATION_SERVICE.ADMIN_NOTIFICATIONS_HANDLER({
+			roles: ['super','sales'],
+			notificationTypes: ['inapp','fcm',],
+			moduleType: 'product.created',
+			payload: {
+				subject: 'A new product has been added.',
+				body: `Hey there, ${NEW_PRODUCT_ITEM?.name} has just been created and is waiting to be reviewed!`,
+				actionUrl: `/admin/products/product?product_id=${NEW_PRODUCT_ITEM?._id}`,
+				product_id: NEW_PRODUCT_ITEM?._id,
+			},
+			priority: 2
+		});
+		// send notification to user.
+		await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+			userIds: [EXISTING_ACCOUNT?.user_model_ref],
+			notificationTypes: ['inapp','fcm'],
+			moduleType: 'product.created',
+			payload: {
+				subject: 'Your product has been created',
+				body: '',
+				actionUrl: `/supplier/products/product?product_id=${NEW_PRODUCT_ITEM?._id}`,
+				product_id: NEW_PRODUCT_ITEM?._id,
+			},
+			priority: 2
+		});
 
 		return res.status(200).send({
 			error: false,
@@ -572,51 +562,33 @@ const UPDATE_PRODUCT_DATA = (async(req,res)=>{
 		}};
 
 		await PRODUCT_MODEL.updateOne({_id: PRODUCT_ID},UPDATE_PRODUCT_DOCUMENT);
-		// send notification on status update
-		let NOTIFICATION_TO_USER;
-		let TO_ADMIN;
-		let NOTIFICATION_PAYLOAD;
-		let ACTION_URL;
-		if(payload.product_stage === EXISTING_PRODUCT?.status?.stage){
+
+		if(payload.product_stage !== EXISTING_PRODUCT?.status?.stage){
 			// no notification required as product status has not changed
-		}else if(payload.product_stage === 'approved'){
-			NOTIFICATION_TO_USER = await USER_BASE_MODEL.findOne({_id: EXISTING_PRODUCT?.lister?.user_model_ref}).exec(); 
-			ACTION_URL = `${process.env.BASE_NOTIFICATION_URL}/supplier/products/product?product_id=${PRODUCT_ID}`;
-			TO_ADMIN=false;
-			NOTIFICATION_PAYLOAD = {
-				title: 'Product Approved',
-                body: `${EXISTING_PRODUCT?.name} has been approved by the admin`,
-                action_url: ACTION_URL,
-                icon: 'https://prokemia.com/assets/images/logo.png',
-                type: 'product.approved',
-                product_id: PRODUCT_ID,
-				notification_type: 'in-app',
-				token: NOTIFICATION_TO_USER?.fcm_token,
-				priority: 3,
-                notification_date: new Date(Date.now())
+			let notification_obj;
+			switch(payload?.product_stage){
+				case 'approved':
+					notification_obj = { moduleType: 'product.approved', status: 'approved', subject: `${EXISTING_PRODUCT?.name} has been approved by the admin` };
+					break;
+				case 'suspended':
+					notification_obj = { moduleType: 'product.rejected', status: 'rejected', subject: `${EXISTING_PRODUCT?.name} has been rejected by the admin` };
+					break;
+				default:
+					break
 			}
-			await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,NOTIFICATION_PAYLOAD?.notification_type,NOTIFICATION_PAYLOAD); // to lister
-			await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,'fcm',NOTIFICATION_PAYLOAD); // to lister
-		}else if(payload.request_status_stage === 'suspended'){
-			NOTIFICATION_TO_USER = await USER_BASE_MODEL.findOne({_id: EXISTING_PRODUCT?.lister?.user_model_ref}).exec(); 
-			ACTION_URL = `${process.env.BASE_NOTIFICATION_URL}/supplier/products/product?product_id=${PRODUCT_ID}`;
-			TO_ADMIN=false;
-			NOTIFICATION_PAYLOAD = {
-				title: 'Product Rejected',
-                body: `${EXISTING_PRODUCT?.name} has been rejected by the admin`,
-				message: '',
-				module: 'product',
-                action_url: ACTION_URL,
-                icon: 'https://prokemia.com/assets/images/logo.png',
-                type: 'product.rejected',
-                product_id: PRODUCT_ID,
-				token: NOTIFICATION_TO_USER?.fcm_token,
-				notification_type: 'in-app',
-				priority: 3,
-                notification_date: new Date(Date.now())
-			}
-			await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,NOTIFICATION_PAYLOAD?.notification_type,NOTIFICATION_PAYLOAD); // to lister
-			await QUEUE_NOTIFICATION(NOTIFICATION_TO_USER,TO_ADMIN,'fcm',NOTIFICATION_PAYLOAD); // to lister
+	
+			await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+				userIds: [EXISTING_PRODUCT?.lister?.user_model_ref],
+				notificationTypes: ['inapp','fcm'],
+				moduleType: notification_obj?.moduleType,
+				payload: {
+					subject: notification_obj?.subject,
+					body: '',
+					actionUrl: `/supplier/products/product?product_id=${EXISTING_PRODUCT?._id}`,
+					product_id: EXISTING_PRODUCT?._id,
+				},
+				priority: 2
+			});
 		};
 		return res.status(200).send({
 			error: false,
@@ -637,7 +609,7 @@ const UPDATE_PRODUCT_DATA = (async(req,res)=>{
 const DELETE_PRODUCT = (async(req,res)=>{
 	const PRODUCT_ID = req.query.product_id;
 	try{
-		const EXISTING_PRODUCT = await PRODUCT_MODEL.findOne({ _id : PRODUCT_ID })
+		const EXISTING_PRODUCT = await PRODUCT_MODEL.findOne({ _id : PRODUCT_ID }).populate({path:'lister',select: 'user_model_ref'}).exec();
 		if (!EXISTING_PRODUCT){
 			return res.status(200).json({
 				error:		true,
@@ -665,7 +637,32 @@ const DELETE_PRODUCT = (async(req,res)=>{
 				"status.comment":'Product deleted',
 				}
 			}) // delete product after 30 days
-		// send email notification to notify lister of the deleted product
+		
+		await NOTIFICATION_SERVICE.ADMIN_NOTIFICATIONS_HANDLER({
+			roles: ['super','sales'],
+			notificationTypes: ['inapp','fcm',],
+			moduleType: 'product.deleted',
+			payload: {
+				subject: `Product has been deleted.`,
+				body: `Hey there, ${EXISTING_PRODUCT?.name} has been marked as deleted!`,
+				actionUrl: `/admin/products/product?product_id=${EXISTING_PRODUCT?._id}`,
+				product_id: EXISTING_PRODUCT?._id,
+			},
+			priority: 2
+		});
+		// send notification to user.
+		await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+			userIds: [EXISTING_PRODUCT?.lister?.user_model_ref],
+			notificationTypes: ['inapp','fcm'],
+			moduleType: 'product.deleted',
+			payload: {
+				subject: 'Your product has been deleted.',
+				body: 'Contact support for reactivation of the product',
+				actionUrl: `/supplier/products/product?product_id=${EXISTING_PRODUCT?._id}`,
+				product_id: EXISTING_PRODUCT?._id,
+			},
+			priority: 2
+		});
 		return res.status(200).send({
 			error: false,
 			message: 'Product deleted successfully'

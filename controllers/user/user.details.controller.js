@@ -311,8 +311,7 @@ const FETCH_SUPPLIER_ACCOUNT_FOR_PAGE=(async(req,res)=>{
 			message:'we could not fetch this suppliers account.'
 		});
 	}
-})
-
+});
 
 const FETCH_ALL_SUPPLIERS_FOR_ADMIN=(async(req,res)=>{
 	const QUERY = req.query.query.toLowerCase();
@@ -376,7 +375,7 @@ const FETCH_ALL_SUPPLIERS_FOR_ADMIN=(async(req,res)=>{
 		return res.status(500).json({error:true,message:'we could not fetch suppliers.'});
 
 	}
-})
+});
 
 const FETCH_SUPPLIER_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 	// Piece the information for a particular supplier
@@ -600,6 +599,10 @@ const FETCH_SUPPLIER_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 					lister: SUPPLIER_ID,
 					"status.stage": 'rejected'
 				}),
+				deleted:	await PRODUCT_MODEL.countDocuments({
+					lister: SUPPLIER_ID,
+					"status.stage": 'deleted'
+				}),
 				drafts:	await PRODUCT_MODEL.countDocuments({
 					lister: SUPPLIER_ID,
 					"status.stage": 'draft'
@@ -611,6 +614,9 @@ const FETCH_SUPPLIER_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 				approved:	await PRODUCT_MODEL.countDocuments({
 					lister: SUPPLIER_ID,
 					"status.stage": 'approved'
+				}),
+				total:	await PRODUCT_MODEL.countDocuments({
+					lister: SUPPLIER_ID
 				}),
 			},
 			/*******************requests*********************************/
@@ -635,10 +641,14 @@ const FETCH_SUPPLIER_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 					type:				'sample',
 					"status.stage":		'pending'
 				}),
-				console:	await REQUEST_MODEL.countDocuments({
+				completed:	await REQUEST_MODEL.countDocuments({
 					supplier_model_ref:	SUPPLIER_ID,
 					type:				'sample',
 					"status.stage":		'completed'
+				}),
+				total:	await REQUEST_MODEL.countDocuments({
+					supplier_model_ref:	SUPPLIER_ID,
+					type:				'sample',
 				}),
 			},
 			quotes_analytics: {
@@ -657,10 +667,14 @@ const FETCH_SUPPLIER_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 					type:				'quote',
 					"status.stage":		'pending'
 				}),
-				console:	await REQUEST_MODEL.countDocuments({
+				completed:	await REQUEST_MODEL.countDocuments({
 					supplier_model_ref:	SUPPLIER_ID,
 					type:				'quote',
 					"status.stage":		'completed'
+				}),
+				total:	await REQUEST_MODEL.countDocuments({
+					supplier_model_ref:	SUPPLIER_ID,
+					type:				'quote',
 				}),
 			},
 
@@ -677,7 +691,7 @@ const FETCH_SUPPLIER_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 			message:'we could not fetch this suppliers account.'
 		});
 	}
-})
+});
 
 const FETCH_ALL_CLIENTS_FOR_ADMIN=(async(req,res)=>{
 	const QUERY = req.query.query.toLowerCase();
@@ -769,7 +783,7 @@ const FETCH_ALL_CLIENTS_FOR_ADMIN=(async(req,res)=>{
 		return res.status(500).json({error:true,message:'we could not fetch clients.'});
 
 	}
-})
+});
 
 const FETCH_ALL_ADMINS=(async(req,res)=>{
 	const QUERY = req.query.query.toLowerCase();
@@ -866,7 +880,7 @@ const FETCH_ALL_ADMINS=(async(req,res)=>{
 		return res.status(500).json({error:true,message:'we could not fetch admins.'});
 
 	}
-})
+});
 
 const FETCH_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 	try{
@@ -906,7 +920,8 @@ const FETCH_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 			message:'we could not fetch this admin account.'
 		});
 	}
-})
+});
+
 const FETCH_CLIENT_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 	// Piece the information for a particular client
 	// Products, Documents, Bio
@@ -1146,7 +1161,7 @@ const FETCH_CLIENT_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 			message:'we could not fetch this client account.'
 		});
 	}
-})
+});
 
 const HANDLE_ACCOUNT_DELETION=(async(req,res)=>{
 	/*
@@ -1236,7 +1251,8 @@ const FETCH_ALL_SALEPEOPLE_FOR_ADMIN=(async(req,res)=>{
 		return res.status(500).json({error:true,message:'we could not fetch salespeople.'});
 
 	}
-})
+});
+
 const FETCH_SALESPERSON_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 	try{
 		const USER_ID = req.query.salesperson_id;
@@ -1304,7 +1320,7 @@ const FETCH_SALESPERSON_ACCOUNT_FOR_ADMIN=(async(req,res)=>{
 			message:'we could not fetch this salesperson account.'
 		});
 	}
-})
+});
 module.exports = {
 	FETCH_USER_DATA,
 	LIST_SUPPLIERS_ACCOUNTS_DATA,

@@ -8,6 +8,7 @@ const { SALESPERSON_MODEL } = require("../../models/ACCOUNT.model.js");
 const { LOGGER } = require('../../lib/logger.lib.js');
 const { ValidationError } = require('../../lib/error.lib.js');
 const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
+const { NOTIFICATION_SERVICE } = require('../notifications/service.js');
 /****************************CONSTANTS*********************************/
 /****************************HELPER FUNCTIONS**************************/
 
@@ -74,6 +75,30 @@ const CREATE_ORDER=(async(req, res)=>{
 		 * Admin
 		 *
 		 */
+		await NOTIFICATION_SERVICE.ADMIN_NOTIFICATIONS_HANDLER({
+			roles: ['super','sales'],
+			notificationTypes: ['inapp','fcm',],
+			moduleType: 'order.created',
+			payload: {
+				subject: `Order has been created.`,
+				body: `Hey there, a new order has been marked as created!`,
+				actionUrl: `/admin/sales/view?order_id=${NEW_ITEM?._id}`,
+			},
+			priority: 2
+		});
+		// send notification to user.
+		// await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+		// 	userIds: [EXISTING_PRODUCT?.lister?.user_model_ref],
+		// 	notificationTypes: ['inapp','fcm'],
+		// 	moduleType: 'order.created',
+		// 	payload: {
+		// 		subject: 'Your order has been created.',
+		// 		body: '',
+		// 		actionUrl: `/supplier/products/product?product_id=${EXISTING_PRODUCT?._id}`,
+		// 		product_id: EXISTING_PRODUCT?._id,
+		// 	},
+		// 	priority: 2
+		// });
 
 		// supplier
 		EXISTING_SALES_ACCOUNT?.orders?.push(NEW_ITEM?._id);

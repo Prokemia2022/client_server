@@ -8,6 +8,7 @@ const { SUPPLIER_MODEL } = require("../../models/ACCOUNT.model.js");
 const { LOGGER } = require('../../lib/logger.lib.js');
 const { ValidationError } = require('../../lib/error.lib.js');
 const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
+const { NOTIFICATION_SERVICE } = require('../notifications/service.js');
 /****************************CONSTANTS*********************************/
 /****************************HELPER FUNCTIONS**************************/
 const HANDLE_STATUS_REQUEST_NOTIFICATIONS = async (user,toAdmin,payload,action_url,notificationType,email_type,status) => {
@@ -135,7 +136,6 @@ const CREATE_REQUEST=(async(req, res)=>{
 				date:				new Date(Date.now())
 			},
 		});
-		
 
 		/*** Send Notifications to respective referees
 		 * Requestor
@@ -145,17 +145,77 @@ const CREATE_REQUEST=(async(req, res)=>{
 		 */
 		NEW_REQUEST_ITEM.product_id = EXISTING_PRODUCT?._id;
 		NEW_REQUEST_ITEM.product_name = EXISTING_PRODUCT?.name;
+		EXISTING_SUPPLIER.email = EXISTING_SUPPLIER?.user_model_ref?.email;
+		EXISTING_SUPPLIER.first_name = EXISTING_SUPPLIER?.user_model_ref?.first_name;
+/*		
+
 		// Send Email to client/requestor
 		let action_url;
 		action_url = `https://prokemia.com/dashboard/client/requests/view?request_id=${NEW_REQUEST_ITEM?._id}`;
 		await HANDLE_NEW_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',NEW_REQUEST_ITEM,action_url,'email','request.created');
 		// send email to lister
-		EXISTING_SUPPLIER.email = EXISTING_SUPPLIER?.user_model_ref?.email;
-		EXISTING_SUPPLIER.first_name = EXISTING_SUPPLIER?.user_model_ref?.first_name;
-		EXISTING_SUPPLIER.fcm_token = EXISTING_SUPPLIER?.user_model_ref?.fcm_token;
 		action_url = `https://prokemia.com/dashboard/supplier/requests/view?request_id=${NEW_REQUEST_ITEM?._id}`;
 		await HANDLE_NEW_REQUEST_NOTIFICATIONS(EXISTING_SUPPLIER,'false',NEW_REQUEST_ITEM,action_url,'email','supplier.request.created');
 		await HANDLE_NEW_REQUEST_NOTIFICATIONS(EXISTING_SUPPLIER,'false',NEW_REQUEST_ITEM,action_url,'fcm','supplier.request.created');
+*/
+		await NOTIFICATION_SERVICE.ADMIN_NOTIFICATIONS_HANDLER({
+			roles: ['super','sales'],
+			notificationTypes: ['inapp','fcm',],
+			moduleType: `${payload.type}.request.created`,
+			payload: {
+				subject: `${payload?.type} request has been created.`,
+				body: ``,
+				actionUrl: `/admin/requests/view?request_id=${NEW_REQUEST_ITEM?._id}`,
+			},
+			priority: 2
+		});
+		// send notification to user.
+		await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+			userIds: [EXISTING_USER?._id],
+			notificationTypes: ['inapp','fcm','email'],
+			moduleType: `${payload.type}.request.created`,
+			payload: {
+				subject: `Your ${payload?.type} request has been created.`,
+				email: EXISTING_USER?.email,
+				body:{
+					name:			EXISTING_USER?.first_name,
+					_id:			NEW_REQUEST_ITEM?._id,
+					product_id:		NEW_REQUEST_ITEM?.product_id,
+					product_name:	NEW_REQUEST_ITEM?.product_name,
+					amount:			NEW_REQUEST_ITEM?.amount,
+					units:			NEW_REQUEST_ITEM?.units,
+					type:			NEW_REQUEST_ITEM?.type,
+					action_url:	    `https://prokemia.com/dashboard/client/requests/view?request_id=${NEW_REQUEST_ITEM?._id}`,
+				},
+				actionUrl: `/client/requests/view?request_id=${NEW_REQUEST_ITEM?._id}`,
+			},
+			priority: 2
+		});
+		await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+			userIds: [EXISTING_SUPPLIER?.user_model_ref],
+			notificationTypes: ['inapp','fcm','email'],
+			moduleType: `${payload.type}.request.created`,
+			payload: {
+				subject: `A ${payload?.type} request has been created.`,
+				email: EXISTING_SUPPLIER?.email,
+				body:{
+					name:			EXISTING_SUPPLIER?.first_name,
+					_id:			NEW_REQUEST_ITEM?._id,
+					product_id:		NEW_REQUEST_ITEM?.product_id,
+					product_name:	NEW_REQUEST_ITEM?.product_name,
+					amount:			NEW_REQUEST_ITEM?.amount,
+					units:			NEW_REQUEST_ITEM?.units,
+					type:			NEW_REQUEST_ITEM?.type,
+					action_url:	    `https://prokemia.com/dashboard/supplier/requests/view?request_id=${NEW_REQUEST_ITEM?._id}`,
+				},
+				actionUrl: `/supplier/requests/view?request_id=${NEW_REQUEST_ITEM?._id}`,
+			},
+			priority: 2
+		});
+		return res.status(200).send({
+			error: false,
+			message: 'Product deleted successfully'
+		})
 
 		/** add requests to respective models
 		 * supplier
@@ -351,19 +411,60 @@ const UPDATE_REQUEST=(async(req,res)=>{
 
 		await REQUEST_MODEL.updateOne({_id: REQUEST_ID},UPDATE_REQUEST_ITEM);
 		// send notification to client
-		EXISTING_REQUEST.product_id = EXISTING_REQUEST?.product_model_ref?._id;
-		EXISTING_REQUEST.product_name = EXISTING_REQUEST?.product_model_ref?.name;
-		let action_url;
-		action_url = `https://prokemia.com/dashboard/client/requests/view?request_id=${EXISTING_REQUEST?._id}`;
-		if(payload.request_status_stage === EXISTING_REQUEST?.status?.stage){
-			;
-		}else if(payload.request_status_stage === 'started'){
-			await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.started',payload?.request_status_stage);
-		}else if(payload.request_status_stage === 'completed'){
-			await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.completed',payload?.request_status_stage);
-		}else if(payload.request_status_stage === 'rejected'){
-			await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.rejected',payload?.request_status_stage);
+		// EXISTING_REQUEST.product_id = EXISTING_REQUEST?.product_model_ref?._id;
+		// EXISTING_REQUEST.product_name = EXISTING_REQUEST?.product_model_ref?.name;
+		// let action_url;
+		// action_url = `https://prokemia.com/dashboard/client/requests/view?request_id=${EXISTING_REQUEST?._id}`;
+		// if(payload.request_status_stage === EXISTING_REQUEST?.status?.stage){
+		// 	;
+		// }else if(payload.request_status_stage === 'started'){
+		// 	await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.started',payload?.request_status_stage);
+		// }else if(payload.request_status_stage === 'completed'){
+		// 	await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.completed',payload?.request_status_stage);
+		// }else if(payload.request_status_stage === 'rejected'){
+		// 	await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.rejected',payload?.request_status_stage);
+		// };
+
+		if(payload.request_status_stage !== EXISTING_REQUEST?.status?.stage){
+			// no notification required as product status has not changed
+			let notification_obj;
+			switch(payload.request_status_stage){
+				case 'started':
+					notification_obj = { moduleType: 'request.started', status: 'started'}
+					break;
+				case 'completed':
+					notification_obj = { moduleType: 'request.completed', status: 'completed'}
+					break;
+				case 'rejected':
+					notification_obj = { moduleType: 'request.rejected', status: 'rejected'}
+					break;
+				default:
+					break
+			}
+	
+			await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+				userIds: [EXISTING_USER?._id],
+				notificationTypes: ['inapp','fcm','email'],
+				moduleType: notification_obj?.moduleType,
+				payload: {
+					subject: `Your ${EXISTING_REQUEST?.type} request has been ${notification_obj.status}.`,
+					actionUrl: `/client/requests/view?request_id=${EXISTING_REQUEST?._id}`,
+					email: EXISTING_USER?.email,
+					body:{
+						name:			EXISTING_USER?.first_name,
+						_id:			EXISTING_REQUEST?._id,
+						product_id:		EXISTING_REQUEST?.product_id,
+						product_name:	EXISTING_REQUEST?.product_name,
+						amount:			EXISTING_REQUEST?.amount,
+						units:			EXISTING_REQUEST?.units,
+						type:			EXISTING_REQUEST?.type,
+						action_url:	    `https://prokemia.com/dashboard/client/requests/view?request_id=${EXISTING_REQUEST?._id}`
+					}
+				},
+				priority: 2
+			});
 		};
+
 		return res.status(200).send({
 			error: false,
 			message: 'Changes have been saved'
@@ -408,16 +509,55 @@ const HANDLE_REQUEST_STATUS=(async(req, res)=>{
 
 		await REQUEST_MODEL.updateOne({_id: REQUEST_ID},UPDATE_REQUEST_ITEM);
 		// send notification to client
-		EXISTING_REQUEST.product_id = EXISTING_REQUEST?.product_model_ref?._id;
-		EXISTING_REQUEST.product_name = EXISTING_REQUEST?.product_model_ref?.name;
-		let action_url;
-		action_url = `https://prokemia.com/dashboard/client/requests/view?request_id=${EXISTING_REQUEST?._id}`;
-		if(payload.request_status_stage === 'started'){
-			await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.started',payload?.request_status_stage);
-		}else if(payload.request_status_stage === 'completed'){
-			await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.completed',payload?.request_status_stage);
-		}else if(payload.request_status_stage === 'rejected'){
-			await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.rejected',payload?.request_status_stage);
+		// EXISTING_REQUEST.product_id = EXISTING_REQUEST?.product_model_ref?._id;
+		// EXISTING_REQUEST.product_name = EXISTING_REQUEST?.product_model_ref?.name;
+		// let action_url;
+		// action_url = `https://prokemia.com/dashboard/client/requests/view?request_id=${EXISTING_REQUEST?._id}`;
+		// if(payload.request_status_stage === 'started'){
+		// 	await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.started',payload?.request_status_stage);
+		// }else if(payload.request_status_stage === 'completed'){
+		// 	await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.completed',payload?.request_status_stage);
+		// }else if(payload.request_status_stage === 'rejected'){
+		// 	await HANDLE_STATUS_REQUEST_NOTIFICATIONS(EXISTING_USER,'false',EXISTING_REQUEST,action_url,'email','request.rejected',payload?.request_status_stage);
+		// };
+		if(payload.request_status_stage !== EXISTING_REQUEST?.status?.stage){
+			// no notification required as product status has not changed
+			let notification_obj;
+			switch(payload.request_status_stage){
+				case 'started':
+					notification_obj = { moduleType: 'request.started', status: 'started'}
+					break;
+				case 'completed':
+					notification_obj = { moduleType: 'request.completed', status: 'completed'}
+					break;
+				case 'rejected':
+					notification_obj = { moduleType: 'request.rejected', status: 'rejected'}
+					break;
+				default:
+					break
+			}
+	
+			await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+				userIds: [EXISTING_USER?._id],
+				notificationTypes: ['inapp','fcm','email'],
+				moduleType: notification_obj?.moduleType,
+				payload: {
+					subject: `Your ${EXISTING_REQUEST?.type} request has been ${notification_obj.status}.`,
+					actionUrl: `/client/requests/view?request_id=${EXISTING_REQUEST?._id}`,
+					email: EXISTING_USER?.email,
+					body:{
+						name:			EXISTING_USER?.first_name,
+						_id:			EXISTING_REQUEST?._id,
+						product_id:		EXISTING_REQUEST?.product_id,
+						product_name:	EXISTING_REQUEST?.product_name,
+						amount:			EXISTING_REQUEST?.amount,
+						units:			EXISTING_REQUEST?.units,
+						type:			EXISTING_REQUEST?.type,
+						action_url:	    `https://prokemia.com/dashboard/client/requests/view?request_id=${EXISTING_REQUEST?._id}`
+					}
+				},
+				priority: 2
+			});
 		};
 
 		return res.status(200).send({
@@ -472,7 +612,38 @@ const DELETE_REQUEST=(async(req,res)=>{
 		EXISTING_PRODUCT?.requests?.pull(REQUEST_ID);
 		EXISTING_PRODUCT?.save();
 
-		await REQUEST_MODEL.deleteOne({_id: REQUEST_ID});
+		// await REQUEST_MODEL.deleteOne({_id: REQUEST_ID});
+		await REQUEST_MODEL.updateOne(
+			{_id: REQUEST_ID},
+			{ $set:{
+				"status.status": false,
+				"status.stage": 'deleted',
+				"status.date": new Date(Date.now() + 30*24*60*60*1000),
+				"status.comment":'Request deleted',
+				}
+			});
+		await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+			userIds: [EXISTING_SUPPLIER?.user_model_ref],
+			notificationTypes: ['inapp','fcm'],
+			moduleType: 'request.deleted',
+			payload: {
+				subject: `Your ${EXISTING_REQUEST?.type} request has been deleted.`,
+				body: '',
+				actionUrl: `/supplier/requests/view?request_id=${EXISTING_REQUEST?._id}`,
+			},
+			priority: 2
+		});
+		await NOTIFICATION_SERVICE.USER_NOTIFICATIONS_HANDLER({
+			userIds: [EXISTING_CLIENT?._id],
+			notificationTypes: ['inapp','fcm'],
+			moduleType: 'request.deleted',
+			payload: {
+				subject: `Your ${EXISTING_REQUEST?.type} request has been deleted.`,
+				body: '',
+				actionUrl: `/client/requests/view?request_id=${EXISTING_REQUEST?._id}`,
+			},
+			priority: 2
+		});
 		
 		return res.status(200).send({
 			error: false,

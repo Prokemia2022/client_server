@@ -179,7 +179,7 @@ const CREATE_ACCOUNT_STATUS = async (user) => {
                 status: false,
                 reason: '',
             },
-            approved: user?.account_type === 'client', // Auto-approve only clients
+            approved: user?.account_type === 'admin', // Auto-approve only clients
             deletion: { 
                 status: false,
                 reason: '',
@@ -310,7 +310,7 @@ async function CREATE_SUPPLIER_MODEL(USER,SUPPLIER,TYPE){
 				user_model_ref:		USER?._id,
 				type:				TYPE || 'supplier',
 				statistics:			{ views: 0 },
-				status:				{ status: true, stage: 'pending', comment: ''}
+				status:				{ status: true, stage: 'approved', comment: ''}
 			})
 		}else{
 			NEW_ITEM = await SUPPLIER_MODEL.create({

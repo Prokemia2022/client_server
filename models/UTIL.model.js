@@ -6,6 +6,7 @@ const NOTIFICATION_SCHEMA_MODEL = new mongoose.Schema({
 	toAdmin:			{ type: Boolean },
 	notificationType:	{ type: String, required: true }, // 'websocket', 'push', 'email'
 	moduleType:			{ type: String, required: true}, // auth, products, orders, requests
+	moduleAction:		{ type: String}, // moduleType.action e.g product.deleted
 	payload:			{ type: Object, required: true }, // Actual notification data: Subject, Body, Action
 	status:				{ sent: Boolean, read: Boolean, status: String }, //
 	retryCount:			{ type: Number, default: 0 },
