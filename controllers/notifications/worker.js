@@ -76,6 +76,15 @@ const PROCEESS_NOTIFICATION_QUEUE = async () => {
 
 // Run the worker periodically (e.g., every few minute)
 cron.schedule('*/10 * * * * *', async() => {
-	await PROCEESS_NOTIFICATION_QUEUE()
+	if (process.env.ACTIVATE_WORKER_NOTIFICATION_FLAG === 'true'){
+		await PROCEESS_NOTIFICATION_QUEUE()
+	}else{
+		LOGGER.log('info',`
+			Function: [CRON_SCHEDULER],
+			title: Paused,
+			module: notification,
+			message: Worker is not actived,
+		`);
+	}
 });
 
