@@ -6,7 +6,7 @@ db.connect()
 const app = express()
 app.use(express.json())
 
-let origins = ['http://localhost:3000','https://prokemia.com','https://test.prokemia.com',];
+let origins = ['http://localhost:3000','https://prokemia.com','https://test.prokemia.com','https://client-front-end-v2.onrender.com'];
 app.use(cors({credentials:true, origin: origins}));
 
 // //routes
