@@ -40,7 +40,15 @@ class NOTIFICATION_SERVICE{
             const adminUserIds = await this.GET_ADMIN_BY_ROLES_FOR_NOTIFICATIONS(roles);
             
             if (!adminUserIds.length) {
-                throw new Error('No admin users found for the specified roles');
+                //throw new Error('No admin users found for the specified roles');
+                LOGGER.log('info',`
+                    Function: [NOTIFICATION_SERVICE.ADMIN_NOTIFICATIONS_HANDLER],
+                    title: 	Failed,
+                    ID: -,
+                    module: notification,
+                    message:No admin users found for the specified roles,
+                `);
+                return ;
             };
 
 			for (const type of notificationTypes) {

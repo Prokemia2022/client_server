@@ -71,7 +71,7 @@ router.get('/list/suppliers', LIST_SUPPLIERS_ACCOUNTS_DATA);
 router.get('/account', FETCH_ACCOUNT_DATA);
 
 router.get('/supplier', FETCH_SUPPLIER_ACCOUNT_FOR_PAGE);
-
+// ACCOUNTS DELETION
 router.delete('/delete/account', 
 	AUTHENTICATE_TOKEN,
 	USER_API_AUTHORIZATION,

@@ -2,8 +2,6 @@
 /****************************MIDDLEWARES*******************************/
 const { HASH_STRING } = require('../../middleware/Hash.middleware.js');
 const { AUTH_TOKEN_GENERATOR } = require('../../middleware/token.handler.middleware.js');
-const { PUBLISH_MESSAGE_TO_BROKER } = require('../../middleware/MESSAGE_BROKER/PUBLISH_MESSAGE_TO_BROKER.js');
-const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
 const NOTIFICATION_SERVICE = require('../notifications/service.js');
 /****************************CONFIGS***********************************/
 /****************************LIB***************************************/
@@ -43,23 +41,6 @@ const CREATE_BASE_USER = async (payload, hashedPassword) => {
         account_type:	payload.account_type
     });
 };
-
-const HANDLE_NOTIFICATIONS = async (user, payload) => {
-	const userId = user?._id;
-	const toAdmin = false;
-	const notificationType = 'email';
-
-    const emailPayload = {
-        type: 'user.created',
-		subject: "Welcome to Prokemia",
-        name: payload?.first_name,
-        email: payload?.email,
-        _id: user?._id
-    };
-    
-    // Uncomment when message broker is ready
-    await QUEUE_NOTIFICATION(userId,toAdmin,notificationType,emailPayload);
-};
 /****************************FUNCTION**********************************/
 
 const NEW_USER_ACCOUNT = (async(req, res)=>{
@@ -82,10 +63,6 @@ const NEW_USER_ACCOUNT = (async(req, res)=>{
 		// Create specific account type
         await CREATE_SPECIFIC_ACCOUNT(NEW_BASE_USER, payload);
 
-		// Handle notifications
-        // send notification to admins of new account creation
-        // await HANDLE_NOTIFICATIONS(NEW_BASE_USER, payload);
-        // Send notification to sales and supervisor admins
         let actionUrl;
         switch(NEW_BASE_USER?.account_type){
             case 'client':

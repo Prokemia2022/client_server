@@ -9,56 +9,57 @@ const {
     PRODUCT_MODEL, 
 } = require("../models/PRODUCT.model.js");
 const { SUPPLIER_MODEL, CLIENT_MODEL } = require("../models/ACCOUNT.model.js");
+const { mockClientData,mockSalespersonData,mockAdminData,mockSupplierData } = require('./mock_data.js');
 
 describe('Account Update Controller', () => {
-    // Test data
-    const mockClientData = {
-        first_name: 'John',
-        last_name: 'Doe',
-        email: 'john@example.com',
-        mobile: '1234567890',
-        password: 'securePassword',
-        account_type: 'client',
-        client: {
-            client_company_name: 'Test Company',
-            client_company_email: 'company@example.com',
-            client_company_mobile: '9876543210',
-            client_company_address: '123 Test St',
-            client_company_website: 'www.example.com',
-            client_company_handler_position: 'Manager'
-        }
-    };
+    // // Test data
+    // const mockClientData = {
+    //     first_name: 'John',
+    //     last_name: 'Doe',
+    //     email: 'john@example.com',
+    //     mobile: '1234567890',
+    //     password: 'securePassword',
+    //     account_type: 'client',
+    //     client: {
+    //         client_company_name: 'Test Company',
+    //         client_company_email: 'company@example.com',
+    //         client_company_mobile: '9876543210',
+    //         client_company_address: '123 Test St',
+    //         client_company_website: 'www.example.com',
+    //         client_company_handler_position: 'Manager'
+    //     }
+    // };
 
-    const mockSupplierData = {
-        first_name: 'Jane',
-        last_name: 'Smith',
-        email: 'jane@example.com',
-        mobile: '0987654321',
-        password: 'securePassword',
-        account_type: 'supplier',
-        supplier: {
-            supplier_type: 'manufacturer',
-            supplier_description: 'Test supplier',
-            supplier_company_name: 'Supply Co',
-            supplier_company_email: 'supply@example.com',
-            supplier_company_mobile: '5555555555',
-            supplier_company_address: '456 Supply St',
-            supplier_company_website: 'www.supply.com',
-            supplier_company_handler_position: 'Owner',
-            supplier_approval_status: true,
-            supplier_status_stage: 'approved'
-        }
-    };
+    // const mockSupplierData = {
+    //     first_name: 'Jane',
+    //     last_name: 'Smith',
+    //     email: 'jane@example.com',
+    //     mobile: '0987654321',
+    //     password: 'securePassword',
+    //     account_type: 'supplier',
+    //     supplier: {
+    //         supplier_type: 'manufacturer',
+    //         supplier_description: 'Test supplier',
+    //         supplier_company_name: 'Supply Co',
+    //         supplier_company_email: 'supply@example.com',
+    //         supplier_company_mobile: '5555555555',
+    //         supplier_company_address: '456 Supply St',
+    //         supplier_company_website: 'www.supply.com',
+    //         supplier_company_handler_position: 'Owner',
+    //         supplier_approval_status: true,
+    //         supplier_status_stage: 'approved'
+    //     }
+    // };
 
-    const mockAdminData = {
-        first_name: 'Admin',
-        last_name: 'User',
-        email: 'admin@example.com',
-        mobile: '1112223333',
-        password: 'adminPass789',
-        account_type: 'admin',
-        role: 'super_admin'
-    };
+    // const mockAdminData = {
+    //     first_name: 'Admin',
+    //     last_name: 'User',
+    //     email: 'admin@example.com',
+    //     mobile: '1112223333',
+    //     password: 'adminPass789',
+    //     account_type: 'admin',
+    //     role: 'super_admin'
+    // };
 
     beforeAll(async () => {
         // Setup in-memory MongoDB for testing

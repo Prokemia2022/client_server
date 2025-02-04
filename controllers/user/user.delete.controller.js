@@ -2,6 +2,7 @@
 const mongoose = require('mongoose');
 /****************************MIDDLEWARES*********************************/
 const { QUEUE_NOTIFICATION } = require('../notifications/index.js');
+const NOTIFICATION_SERVICE = require('../notifications/service.js');
 /****************************MODELS**************************************/
 const { USER_BASE_MODEL, ACCOUNT_STATUS_MODEL } = require("../../models/USER.model.js");
 const { 
@@ -10,7 +11,12 @@ const {
 	REQUEST_MODEL, 
 	MARKET_MODEL 
 } = require("../../models/PRODUCT.model.js");
-const { SUPPLIER_MODEL, CLIENT_MODEL, SALESPERSON_MODEL } = require("../../models/ACCOUNT.model.js");
+const { 
+	CLIENT_MODEL, 
+	SUPPLIER_MODEL, 
+	ADMIN_MODEL, 
+    SALESPERSON_MODEL
+} = require('../../models/ACCOUNT.model.js');
 /****************************CONFIGS*************************************/
 /****************************LIB*****************************************/
 const { LOGGER } = require('../../lib/logger.lib.js');
@@ -18,7 +24,6 @@ const { ValidationError } = require('../../lib/error.lib.js');
 const cron = require('node-cron');
 /****************************CONSTANTS*********************************/
 /****************************HELPER FUNCTIONS**************************/
-
 const HANDLE_GET_NEXT_30_DAYS=()=>{
 	const now = new Date();
 	const next30Days = now.getTime() + 30 * 24 * 60 * 60 * 1000;
@@ -60,7 +65,6 @@ const HANDLE_DELETION_NOTIFICATIONS = async (user) => {
 };
 
 /****************************FUNCTIONS***********************************/
-
 const HANDLE_FLAG_ACCOUNT_DELETION=(async(req,res)=>{
 	const ACCOUNT_ID = req.query.account_id;
 	const payload = req.body;
@@ -75,11 +79,11 @@ const HANDLE_FLAG_ACCOUNT_DELETION=(async(req,res)=>{
 			{ $set: {
 				"deletion.status" :	true,
 				"deletion.reason" :	payload?.reason,
-				"deletion.date" :	new Date() || HANDLE_GET_NEXT_30_DAYS()
+				"deletion.date" :	HANDLE_GET_NEXT_30_DAYS()
 			}}
 		);
 		// Notifications
-		await HANDLE_FLAG_NOTIFICATIONS(EXISTING_ACCOUNT);
+
 		// Logging
 		LOGGER.log('info',`SUCCESS[HANDLE_FLAG_ACCOUNT_DELETION]`);
 
@@ -106,7 +110,7 @@ const HANDLE_ACCOUNT_DELETION=(async(req,res)=>{
 	const ACCOUNT_ID = req.query.account_id;
 	const ACCOUNT_TYPE = req.query?.account_type;
 	try{
-		if (!ACCOUNT_ID){
+		if (!ACCOUNT_ID || !ACCOUNT_TYPE){
 			throw new ValidationError('Missing parameter requirements')
 		}
 		switch (ACCOUNT_TYPE){
@@ -114,8 +118,7 @@ const HANDLE_ACCOUNT_DELETION=(async(req,res)=>{
 				await DELETE_CLIENT_MODELS(ACCOUNT_ID);
 				break;
 			case 'supplier':
-				const EXISTING_SUPPLIER_ACCOUNT = await SUPPLIER_MODEL.findOne({user_model_ref: ACCOUNT_ID},{products: 1, documents: 1})
-				
+				const EXISTING_SUPPLIER_ACCOUNT = await SUPPLIER_MODEL.findOne({user_model_ref: ACCOUNT_ID},{products: 1, documents: 1})		
 				await DELETE_SUPPLIER_MODELS(ACCOUNT_ID,EXISTING_SUPPLIER_ACCOUNT?.products,EXISTING_SUPPLIER_ACCOUNT?.documents);
 				break;
 			case 'salesperson':				
@@ -160,6 +163,7 @@ const DELETE_ADMIN_MODELS=async(ACCOUNT_ID)=>{
 		throw new ValidationError('We could not delete account data');
 	}
 };
+
 const DELETE_CLIENT_MODELS=async(ACCOUNT_ID)=>{
 	try{
 		await REQUEST_MODEL.updateMany({requestor_model_ref: ACCOUNT_ID},{
@@ -167,16 +171,16 @@ const DELETE_CLIENT_MODELS=async(ACCOUNT_ID)=>{
 				"status.status":	false,
 				"status.comment":	'Request is inactive as the client account deleted their account'
 			}
-		})
-		await CLIENT_MODEL.deleteOne({user_model_ref: ACCOUNT_ID})
-		await ACCOUNT_STATUS_MODEL.deleteOne({user_model_ref: ACCOUNT_ID})	
-		await USER_BASE_MODEL.deleteOne({_id: ACCOUNT_ID})
+		});
+		await CLIENT_MODEL.deleteOne({user_model_ref: ACCOUNT_ID});
+		await ACCOUNT_STATUS_MODEL.deleteOne({user_model_ref: ACCOUNT_ID});
+		await USER_BASE_MODEL.deleteOne({_id: ACCOUNT_ID});
 	}catch(error){
-		throw new ValidationError('We could not delete your account data');
+		throw new ValidationError('We could not delete client account data');
 	}
 };
+
 const DELETE_SALESPERSON_MODELS=async(ACCOUNT_ID)=>{
-	console.log(ACCOUNT_ID)
 	try{
 		await SALESPERSON_MODEL.deleteOne({user_model_ref: ACCOUNT_ID})
 		await ACCOUNT_STATUS_MODEL.deleteOne({user_model_ref: ACCOUNT_ID})	
@@ -231,20 +235,19 @@ const CRON_HANDLE_ACCOUNT_DELETION=async()=>{
 				break;
 			case 'supplier':
 				const EXISTING_SUPPLIER_ACCOUNT = await SUPPLIER_MODEL.findOne({user_model_ref: ACCOUNT_ID},{products: 1, documents: 1})
-				
 				await DELETE_SUPPLIER_MODELS(ACCOUNT_ID,EXISTING_SUPPLIER_ACCOUNT?.products,EXISTING_SUPPLIER_ACCOUNT?.documents);
+				break;
+			case 'salesperson':				
+				await DELETE_SALESPERSON_MODELS(ACCOUNT_ID);
+				break;
+			case 'admin':
+				await DELETE_ADMIN_MODELS(ACCOUNT_ID)
 				break;
 			default:
 				throw new ValidationError('Missing parameter requirements')
 		}
 	};
 }
-
-
-// Run the worker periodically (e.g., every once a day)
-cron.schedule('30 10 * * * *', async() => {
-	await CRON_HANDLE_ACCOUNT_DELETION()
-});
 
 module.exports = {
 	HANDLE_FLAG_ACCOUNT_DELETION,

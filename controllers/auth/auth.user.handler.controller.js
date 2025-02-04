@@ -154,11 +154,10 @@ const HANDLE_USER_ACCOUNT_DELETION_CRON_FUNCTION = (async(req, res)=>{
 			email:	EXISTING_USER?.email,
 			sentAt:	new Date(Date.now())
 		};
-		PUBLISH_MESSAGE_TO_BROKER(EMAIL_PAYLOAD,'EMAIL_QUEUE');
 
 		return res.status(200).json({
 			error: false,
-			message: 'Account deleted successfully.',
+			message: 'Account flagged for deletion successfully.',
 		})
 	}catch(err){
 		LOGGER.log('error',`Error While Handling Deletion of User Account: ${UID}`,err);
