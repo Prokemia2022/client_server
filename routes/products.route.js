@@ -13,6 +13,7 @@ const  {
     top_products,
     edit_product
 } = require('../controllers/products.controller');
+const { Market_Featured_products } = require('../controllers/email.controller');
 
 router.get('/srt', getproducts_srt);
 router.get('/search', products_search);
@@ -23,6 +24,8 @@ router.post('/product/feature', feature_product)
 router.post('/product/unfeature', unfeature_product);
 router.post('/product/new', add_product)
 router.get('/top',top_products);
-router.put('/product/edit',edit_product)
+router.put('/product/edit',edit_product);
+router.post('/market',Market_Featured_products);
+
 
 module.exports = router;

@@ -31,6 +31,15 @@ const create_request_demo_ticket = require("./routes/Support/create_request_demo
  * 
  * 
  */
+const auth_routes = require("./routes/AUTH.route.js");
+const user_routes = require("./routes/USER.route.js");
+const product_routes_v2 = require("./routes/PRODUCT.route.js");
+const market_routes = require("./routes/MARKET.route.js");
+const request_routes = require("./routes/REQUEST.route.js");
+const support_routes = require('./routes/SUPPORT.route.js');
+const document_routes = require('./routes/DOCUMENT.route.js');
+
+const {AUTHENTICATE_TOKEN} = require('./middleware/token.verifier.middleware.js');
 
 const signup_routes = require('./routes/signup.route.js');
 const signin_routes = require('./routes/signin.route.js')
@@ -48,17 +57,27 @@ const otp_routes = require('./routes/otp.route.js');
 const quote_routes = require('./routes/quote.route.js');
 const sample_routes = require('./routes/sample.route.js');
 const consultation_routes = require('./routes/consultations.route.js')
-const Verifying_email_routes = require('./routes/verify_email.route.js')
+const Verifying_email_routes = require('./routes/verify_email.route.js');
+const MARKETING_EMAIL_ROUTES = require('./routes/email_marketing.route.js');
 
 const update_script_route = require('./middleware/scripts/update_user_account.js');
 app.use('/api/script',update_script_route)
 const fetch_det_script_route = require('./middleware/scripts/fetch_user_details.middleware.js');
 const { edit_distributor } = require('./controllers/distributor.controller.js');
+
+
+
 app.use('/api/script',fetch_det_script_route);
 
 
-// /*--account---*/
-
+// /*--V2---*/
+app.use("/api/auth", auth_routes);
+app.use("/api/user", user_routes);
+app.use("/api/product", product_routes_v2);
+app.use("/api/market", market_routes);
+app.use("/api/request", request_routes);
+app.use("/api/support", support_routes);
+app.use("/api/document", document_routes);
 /*---control---*/
 app.use("/api/suggest_industry",suggest_industry);//done
 app.use("/api/suggest_technology",suggest_technology);//done
@@ -80,6 +99,7 @@ app.use('/api/quote', quote_routes);
 app.use('/api/sample', sample_routes);
 app.use('/api/consultation', consultation_routes);
 app.use('/api/verify_email', Verifying_email_routes);
+app.use('/api/marketing/email', MARKETING_EMAIL_ROUTES);
 
 // /*---vacancies---*/
 app.use("/api/get_vacancies",get_vacancies);//done

@@ -1,11 +1,11 @@
 const http = require("http");
 const app = require("./app.js");
 require("dotenv").config();
+const { LOGGER } = require('./lib/logger.lib.js');
 
 const server = http.createServer(app);
 const port = process.env.PORT || 5000;
-//const port = process.env.Port || 5001
 
 server.listen(port, (req,res)=>{
-	console.log(`server listening on http://localhost:${port}`)
+	LOGGER.log('info',`server listening on http://localhost:${port}`)
 })

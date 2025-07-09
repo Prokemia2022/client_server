@@ -13,11 +13,13 @@ const MailSender = async (payload)=>{
     };
     
     Transporter.sendMail(mailOptions, function (err, info){
-        if(err)
+        if(err){
             console.log(err)
-        else
+            //throw new Error('error while sending email')
+        }else{
             console.log(info,{'sender_email':sender_email},{'receipient_email':receipient_email})
-            throw new Error('error while sending email')
+        }
     })
 }
+
 module.exports = MailSender;
